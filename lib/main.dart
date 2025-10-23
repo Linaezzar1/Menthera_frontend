@@ -3,9 +3,13 @@ import 'package:projet_integration/screens/login_screen.dart';
 import 'package:projet_integration/screens/signup_screen.dart';
 import 'package:projet_integration/screens/voice_to_ai_screen.dart';
 import 'package:projet_integration/screens/welcome_screen.dart';
+import 'package:projet_integration/services/auth_guard.dart';
 import 'package:projet_integration/theme/app_theme.dart';
+import 'package:projet_integration/services/auth_service.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await AuthService.initialize();
   runApp(const MyApp());
 }
 
@@ -24,8 +28,8 @@ class MyApp extends StatelessWidget {
       routes: {
         '/login': (context) => const LoginScreen(),
         '/signup': (context) => const SignupScreen(),
-        '/welcome': (context) => const WelcomeScreen(),
-        '/voice': (context) => const VoiceToAiScreen(),
+        '/welcome': (context) => const AuthGuard(child: WelcomeScreen()) ,
+        '/voice': (context) => const AuthGuard(child: VoiceToAiScreen()) ,
       },
     );
   }

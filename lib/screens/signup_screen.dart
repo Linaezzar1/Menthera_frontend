@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'dart:ui';
 import '../theme/app_theme.dart';
 import '../utils/constants.dart';
+import '../services/auth_service.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -17,7 +18,9 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
   final _emailController = TextEditingController();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
   bool _isPasswordVisible = false;
+  bool _isConfirmPasswordVisible = false;
   bool _isLoading = false;
 
   @override
@@ -25,7 +28,32 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
     _emailController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _handleSignUp() async {
+    if (_formKey.currentState!.validate()) {
+      setState(() => _isLoading = true);
+      try {
+        await AuthService.signup(
+          _emailController.text,
+          _usernameController.text,
+          _passwordController.text,
+          _confirmPasswordController.text,
+        );
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Inscription réussie !')),
+        );
+        Navigator.pushReplacementNamed(context, '/login');
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur : $e')),
+        );
+      } finally {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   @override
@@ -39,19 +67,16 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              const Color(0xFF5B4FB3), // Purple profond apaisant
-              const Color(0xFF7B68C8), // Lavande
-              const Color(0xFF9B8FDB), // Mauve clair
+              const Color(0xFF5B4FB3),
+              const Color(0xFF7B68C8),
+              const Color(0xFF9B8FDB),
             ],
             stops: const [0.0, 0.5, 1.0],
           ),
         ),
         child: Stack(
           children: [
-            // Animated background circles pour effet de profondeur
             _buildAnimatedBackground(),
-
-            // SafeArea pour gérer les notches
             SafeArea(
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
@@ -63,15 +88,9 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
                   child: Column(
                     children: [
                       SizedBox(height: size.height * 0.05),
-
-                      // Logo et personnage 3D
                       _buildHeader(),
-
                       SizedBox(height: size.height * 0.04),
-
-                      // Glassmorphism card avec le formulaire
                       _buildGlassmorphicForm(context, size),
-
                       SizedBox(height: size.height * 0.02),
                     ],
                   ),
@@ -81,7 +100,9 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
           ],
         ),
       ),
-    );
+    ).animate()
+        .fadeIn(duration: 800.ms, delay: 500.ms)
+        .scale(begin: const Offset(0.9, 0.9), end: const Offset(1.0, 1.0), curve: Curves.easeOut);
   }
 
   Widget _buildAnimatedBackground() {
@@ -96,10 +117,7 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: RadialGradient(
-                colors: [
-                  Colors.white.withOpacity(0.1),
-                  Colors.transparent,
-                ],
+                colors: [Colors.white.withOpacity(0.1), Colors.transparent],
               ),
             ),
           ).animate(onPlay: (controller) => controller.repeat(reverse: true))
@@ -116,10 +134,7 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: RadialGradient(
-                colors: [
-                  Colors.purple.withOpacity(0.15),
-                  Colors.transparent,
-                ],
+                colors: [Colors.purple.withOpacity(0.15), Colors.transparent],
               ),
             ),
           ).animate(onPlay: (controller) => controller.repeat(reverse: true))
@@ -134,7 +149,6 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
   Widget _buildHeader() {
     return Column(
       children: [
-        // Character illustration
         Hero(
           tag: 'app_character',
           child: Container(
@@ -143,24 +157,15 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: Colors.white.withOpacity(0.1),
-              border: Border.all(
-                color: Colors.white.withOpacity(0.2),
-                width: 2,
-              ),
+              border: Border.all(color: Colors.white.withOpacity(0.2), width: 2),
             ),
             padding: const EdgeInsets.all(20),
-            child: Image.asset(
-              'assets/images/robot1.png',
-              fit: BoxFit.contain,
-            ),
+            child: Image.asset('assets/images/robot1.png', fit: BoxFit.contain),
           ).animate()
               .fadeIn(duration: 600.ms)
               .scale(begin: const Offset(0.5, 0.5), end: const Offset(1.0, 1.0), curve: Curves.easeOutBack),
         ),
-
         const SizedBox(height: 24),
-
-        // App name avec style grec
         Text(
           'Menthera',
           style: GoogleFonts.cinzel(
@@ -169,19 +174,13 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
             color: Colors.white,
             letterSpacing: 2,
             shadows: [
-              Shadow(
-                blurRadius: 10,
-                color: Colors.black.withOpacity(0.3),
-                offset: const Offset(0, 4),
-              ),
+              Shadow(blurRadius: 10, color: Colors.black.withOpacity(0.3), offset: const Offset(0, 4)),
             ],
           ),
         ).animate()
             .fadeIn(duration: 800.ms, delay: 200.ms)
             .slideY(begin: 0.3, end: 0, curve: Curves.easeOut),
-
         const SizedBox(height: 8),
-
         Text(
           'Votre accompagnement psychologique',
           style: GoogleFonts.poppins(
@@ -209,16 +208,10 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [
-                Colors.white.withOpacity(0.2),
-                Colors.white.withOpacity(0.1),
-              ],
+              colors: [Colors.white.withOpacity(0.2), Colors.white.withOpacity(0.1)],
             ),
             borderRadius: BorderRadius.circular(30),
-            border: Border.all(
-              color: Colors.white.withOpacity(0.3),
-              width: 1.5,
-            ),
+            border: Border.all(color: Colors.white.withOpacity(0.3), width: 1.5),
           ),
           child: Form(
             key: _formKey,
@@ -237,9 +230,7 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
                 ).animate()
                     .fadeIn(duration: 600.ms, delay: 600.ms)
                     .slideY(begin: 0.5, end: 0),
-
                 const SizedBox(height: 8),
-
                 Text(
                   'Commencez votre parcours de bien-être',
                   style: GoogleFonts.poppins(
@@ -251,10 +242,7 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
                 ).animate()
                     .fadeIn(duration: 600.ms, delay: 700.ms)
                     .slideY(begin: 0.5, end: 0),
-
                 const SizedBox(height: 32),
-
-                // Email field
                 _ModernInputField(
                   controller: _emailController,
                   label: 'Email',
@@ -262,42 +250,29 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
                   icon: Icons.email_outlined,
                   keyboardType: TextInputType.emailAddress,
                   validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Veuillez entrer votre email';
-                    }
-                    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                    if (value == null || value.isEmpty) return 'Veuillez entrer votre email';
+                    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value))
                       return 'Email invalide';
-                    }
                     return null;
                   },
                 ).animate()
                     .fadeIn(duration: 500.ms, delay: 800.ms)
                     .slideX(begin: -0.2, end: 0),
-
                 const SizedBox(height: 16),
-
-                // Username field
                 _ModernInputField(
                   controller: _usernameController,
                   label: 'Nom d\'utilisateur',
                   hint: 'Choisissez un pseudo',
                   icon: Icons.person_outline,
                   validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Veuillez entrer un nom d\'utilisateur';
-                    }
-                    if (value.length < 3) {
-                      return 'Minimum 3 caractères';
-                    }
+                    if (value == null || value.isEmpty) return 'Veuillez entrer un nom d\'utilisateur';
+                    if (value.length < 3) return 'Minimum 3 caractères';
                     return null;
                   },
                 ).animate()
                     .fadeIn(duration: 500.ms, delay: 900.ms)
                     .slideX(begin: -0.2, end: 0),
-
                 const SizedBox(height: 16),
-
-                // Password field
                 _ModernInputField(
                   controller: _passwordController,
                   label: 'Mot de passe',
@@ -310,83 +285,68 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
                       color: Colors.white.withOpacity(0.7),
                       size: 22,
                     ),
-                    onPressed: () {
-                      setState(() {
-                        _isPasswordVisible = !_isPasswordVisible;
-                      });
-                    },
+                    onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
                   ),
                   validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Veuillez entrer un mot de passe';
-                    }
-                    if (value.length < 8) {
-                      return 'Minimum 8 caractères';
-                    }
+                    if (value == null || value.isEmpty) return 'Veuillez entrer un mot de passe';
+                    if (value.length < 8) return 'Minimum 8 caractères';
                     return null;
                   },
                 ).animate()
                     .fadeIn(duration: 500.ms, delay: 1000.ms)
                     .slideX(begin: 0.2, end: 0),
-
+                const SizedBox(height: 16),
+                _ModernInputField(
+                  controller: _confirmPasswordController,
+                  label: 'Confirmer mot de passe',
+                  hint: 'Confirmez votre mot de passe',
+                  icon: Icons.lock_outline,
+                  obscureText: !_isConfirmPasswordVisible,
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _isConfirmPasswordVisible ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                      color: Colors.white.withOpacity(0.7),
+                      size: 22,
+                    ),
+                    onPressed: () => setState(() => _isConfirmPasswordVisible = !_isConfirmPasswordVisible),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) return 'Veuillez confirmer votre mot de passe';
+                    if (value != _passwordController.text) return 'Les mots de passe ne correspondent pas';
+                    return null;
+                  },
+                ).animate()
+                    .fadeIn(duration: 500.ms, delay: 1100.ms)
+                    .slideX(begin: 0.2, end: 0),
                 const SizedBox(height: 28),
-
-                // Sign up button
                 _buildSignUpButton(),
-
                 const SizedBox(height: 24),
-
-                // Divider
                 Row(
                   children: [
-                    Expanded(
-                      child: Divider(
-                        color: Colors.white.withOpacity(0.3),
-                        thickness: 1,
-                      ),
-                    ),
+                    Expanded(child: Divider(color: Colors.white.withOpacity(0.3), thickness: 1)),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Text(
                         'ou continuer avec',
-                        style: GoogleFonts.poppins(
-                          fontSize: 13,
-                          color: Colors.white.withOpacity(0.8),
-                        ),
+                        style: GoogleFonts.poppins(fontSize: 13, color: Colors.white.withOpacity(0.8)),
                       ),
                     ),
-                    Expanded(
-                      child: Divider(
-                        color: Colors.white.withOpacity(0.3),
-                        thickness: 1,
-                      ),
-                    ),
+                    Expanded(child: Divider(color: Colors.white.withOpacity(0.3), thickness: 1)),
                   ],
                 ).animate()
-                    .fadeIn(duration: 500.ms, delay: 1200.ms),
-
+                    .fadeIn(duration: 500.ms, delay: 1300.ms),
                 const SizedBox(height: 20),
-
-                // Social buttons
                 _buildSocialButtons(),
-
                 const SizedBox(height: 24),
-
-                // Sign in link
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
                       'Déjà un compte ? ',
-                      style: GoogleFonts.poppins(
-                        fontSize: 14,
-                        color: Colors.white.withOpacity(0.8),
-                      ),
+                      style: GoogleFonts.poppins(fontSize: 14, color: Colors.white.withOpacity(0.8)),
                     ),
                     GestureDetector(
-                      onTap: () {
-                        Navigator.pushNamed(context, '/login');
-                      },
+                      onTap: () => Navigator.pushNamed(context, '/login'),
                       child: Text(
                         'Se connecter',
                         style: GoogleFonts.poppins(
@@ -400,7 +360,7 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
                     ),
                   ],
                 ).animate()
-                    .fadeIn(duration: 500.ms, delay: 1400.ms)
+                    .fadeIn(duration: 500.ms, delay: 1500.ms)
                     .slideY(begin: 0.3, end: 0),
               ],
             ),
@@ -417,10 +377,7 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
       height: 56,
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [
-            Color(0xFF8B7AC7),
-            Color(0xFF6B5FA8),
-          ],
+          colors: [Color(0xFF8B7AC7), Color(0xFF6B5FA8)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -443,10 +400,7 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
                 ? const SizedBox(
               width: 24,
               height: 24,
-              child: CircularProgressIndicator(
-                color: Colors.white,
-                strokeWidth: 2.5,
-              ),
+              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
             )
                 : Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -461,20 +415,16 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
                   ),
                 ),
                 const SizedBox(width: 8),
-                const Icon(
-                  Icons.arrow_forward_rounded,
-                  color: Colors.white,
-                  size: 20,
-                ),
+                const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 20),
               ],
             ),
           ),
         ),
       ),
     ).animate()
-        .fadeIn(duration: 500.ms, delay: 1100.ms)
+        .fadeIn(duration: 500.ms, delay: 1200.ms)
         .scaleXY(begin: 0.95, end: 1.0, curve: Curves.easeOut)
-        .shimmer(duration: 2000.ms, delay: 1500.ms, color: Colors.white.withOpacity(0.3));
+        .shimmer(duration: 2000.ms, delay: 1400.ms, color: Colors.white.withOpacity(0.3));
   }
 
   Widget _buildSocialButtons() {
@@ -485,7 +435,7 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
           icon: Icons.g_mobiledata_rounded,
           label: 'Google',
           onTap: () {
-            // Implement Google sign in
+            // Implémenter Google sign-in (redirection vers /api/v1/auth/google)
           },
         ),
         const SizedBox(width: 16),
@@ -493,7 +443,7 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
           icon: Icons.facebook_rounded,
           label: 'Facebook',
           onTap: () {
-            // Implement Facebook sign in
+            // Implémenter Facebook sign-in (redirection vers /api/v1/auth/facebook)
           },
         ),
       ],
@@ -501,28 +451,8 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
         .fadeIn(duration: 500.ms, delay: 1300.ms)
         .slideY(begin: 0.3, end: 0);
   }
-
-  void _handleSignUp() async {
-    if (_formKey.currentState!.validate()) {
-      setState(() {
-        _isLoading = true;
-      });
-
-      // Simulate API call
-      await Future.delayed(const Duration(seconds: 2));
-
-      setState(() {
-        _isLoading = false;
-      });
-
-      if (mounted) {
-        Navigator.pushNamed(context, '/voice');
-      }
-    }
-  }
 }
 
-// Modern Input Field with glassmorphism
 class _ModernInputField extends StatelessWidget {
   final TextEditingController controller;
   final String label;
@@ -567,42 +497,22 @@ class _ModernInputField extends StatelessWidget {
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.15),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: Colors.white.withOpacity(0.3),
-                  width: 1,
-                ),
+                border: Border.all(color: Colors.white.withOpacity(0.3), width: 1),
               ),
               child: TextFormField(
                 controller: controller,
                 obscureText: obscureText,
                 keyboardType: keyboardType,
                 validator: validator,
-                style: GoogleFonts.poppins(
-                  color: Colors.white,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w400,
-                ),
+                style: GoogleFonts.poppins(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w400),
                 decoration: InputDecoration(
                   hintText: hint,
-                  hintStyle: GoogleFonts.poppins(
-                    color: Colors.white.withOpacity(0.5),
-                    fontSize: 14,
-                  ),
-                  prefixIcon: Icon(
-                    icon,
-                    color: Colors.white.withOpacity(0.7),
-                    size: 22,
-                  ),
+                  hintStyle: GoogleFonts.poppins(color: Colors.white.withOpacity(0.5), fontSize: 14),
+                  prefixIcon: Icon(icon, color: Colors.white.withOpacity(0.7), size: 22),
                   suffixIcon: suffixIcon,
                   border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 16,
-                  ),
-                  errorStyle: GoogleFonts.poppins(
-                    fontSize: 11,
-                    color: Colors.red.shade300,
-                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  errorStyle: GoogleFonts.poppins(fontSize: 11, color: Colors.red.shade300),
                 ),
               ),
             ),
@@ -613,17 +523,12 @@ class _ModernInputField extends StatelessWidget {
   }
 }
 
-// Modern Social Button
 class _SocialButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
 
-  const _SocialButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
+  const _SocialButton({required this.icon, required this.label, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -635,10 +540,7 @@ class _SocialButton extends StatelessWidget {
           decoration: BoxDecoration(
             color: Colors.white.withOpacity(0.15),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: Colors.white.withOpacity(0.3),
-              width: 1,
-            ),
+            border: Border.all(color: Colors.white.withOpacity(0.3), width: 1),
           ),
           child: Material(
             color: Colors.transparent,
@@ -646,26 +548,15 @@ class _SocialButton extends StatelessWidget {
               onTap: onTap,
               borderRadius: BorderRadius.circular(12),
               child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 12,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      icon,
-                      color: Colors.white,
-                      size: 24,
-                    ),
+                    Icon(icon, color: Colors.white, size: 24),
                     const SizedBox(width: 8),
                     Text(
                       label,
-                      style: GoogleFonts.poppins(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.white,
-                      ),
+                      style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.white),
                     ),
                   ],
                 ),
