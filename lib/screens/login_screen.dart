@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'dart:ui';
 import '../theme/app_theme.dart';
 import '../utils/constants.dart';
@@ -387,16 +388,22 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
         _SocialButton(
           icon: Icons.g_mobiledata_rounded,
           label: 'Google',
-          onTap: () {
-            // Implémenter Google sign-in (redirection vers /api/v1/auth/google)
+          onTap: () async {
+            final url = Uri.parse('${AppConstants.apiBaseUrl}/api/v1/auth/google');
+            if (await canLaunchUrl(url)) {
+              await launchUrl(url, mode: LaunchMode.externalApplication);
+            }
           },
         ),
         const SizedBox(width: 16),
         _SocialButton(
           icon: Icons.facebook_rounded,
           label: 'Facebook',
-          onTap: () {
-            // Implémenter Facebook sign-in (redirection vers /api/v1/auth/facebook)
+          onTap: () async {
+            final url = Uri.parse('${AppConstants.apiBaseUrl}/api/v1/auth/facebook');
+            if (await canLaunchUrl(url)) {
+              await launchUrl(url, mode: LaunchMode.externalApplication);
+            }
           },
         ),
       ],
