@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:projet_integration/screens/history_screen.dart';
 import 'package:projet_integration/screens/login_screen.dart';
+import 'package:projet_integration/screens/payment_screen.dart';
 import 'package:projet_integration/screens/signup_screen.dart';
 import 'package:projet_integration/screens/voice_to_ai_screen.dart';
 import 'package:projet_integration/screens/welcome_screen.dart';
@@ -30,6 +32,8 @@ class MyApp extends StatelessWidget {
         '/signup': (context) => const SignupScreen(),
         '/welcome': (context) => const AuthGuard(child: WelcomeScreen()) ,
         '/voice': (context) => const AuthGuard(child: VoiceToAiScreen()) ,
+        '/payment': (context) => const PaymentScreen(),
+        '/history': (context) => const HistoryScreen(),
       },
     );
   }
