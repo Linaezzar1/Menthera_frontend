@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:projet_integration/services/auth_service.dart';
 
 class HistoryItem {
   final String id;
@@ -86,6 +87,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
             icon: const Icon(Icons.workspace_premium_rounded, color: Colors.white),
             tooltip: 'S’abonner',
           ),
+
         ],
       ),
     );

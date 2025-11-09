@@ -1,20 +1,72 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:http/http.dart' as http;
+import 'package:projet_integration/services/auth_service.dart';
+import 'dart:convert';
+import 'package:url_launcher/url_launcher.dart';
 
 class PaymentScreen extends StatefulWidget {
   const PaymentScreen({super.key});
+
   @override
   State<PaymentScreen> createState() => _PaymentScreenState();
 }
 
 class _PaymentScreenState extends State<PaymentScreen> {
-  String _plan = 'mensuel';
+  String _plan = 'monthly';
+  bool _isLoading = false;
+  String? _error;
 
-  void _continuePayment() {
-    // Ici tu déclenches l'appel à ton backend qui redirige vers Stripe Checkout
-    // ou qui vérifie l’accès déjà payé.
-    // Par défaut, simple navigation :
-    Navigator.pop(context, true); // Ou Navigator.pushReplacementNamed(context, '/welcome');
+  final Map<String, String> _planLabels = {
+    'monthly': 'Mensuel',
+    'quarterly': 'Pro',
+    'yearly': 'Annuel',
+  };
+
+  final Map<String, double> _planPrices = {
+    'monthly': 9.99,
+    'quarterly': 14.99,
+    'yearly': 79.99,
+  };
+
+  Future<void> _continuePayment() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final token = AuthService.getAccessToken();
+      if (token == null) throw Exception("Token manquant, veuillez vous reconnecter.");
+
+      final response = await http.post(
+        Uri.parse('http://localhost:5000/api/v1/billing/checkout'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'plan': _plan}),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200 && data['data']?['url'] != null) {
+        await launchUrl(Uri.parse(data['data']['url']),
+            mode: LaunchMode.externalApplication);
+      } else {
+        setState(() {
+          _error = data['error'] ?? 'Erreur lors de la récupération du paiement.';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _error = 'Erreur: $e';
+      });
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
   @override
@@ -83,6 +135,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
                     _buildPlans(),
                     const SizedBox(height: 18),
                     _buildSummary(),
+                    if (_error != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Text(_error!, style: const TextStyle(color: Colors.red)),
+                      ),
                     const SizedBox(height: 26),
                     SizedBox(
                       width: double.infinity,
@@ -94,8 +151,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                           elevation: 8,
                         ),
-                        onPressed: _continuePayment,
-                        child: Text(
+                        onPressed: _isLoading ? null : _continuePayment,
+                        child: _isLoading
+                            ? const CircularProgressIndicator(color: Colors.white)
+                            : Text(
                           "Continuer le paiement",
                           style: GoogleFonts.poppins(
                             fontWeight: FontWeight.w700,
@@ -124,11 +183,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
         Wrap(
           spacing: 10,
           runSpacing: 10,
-          children: [
-            _planChip('mensuel', 'Mensuel', '9.99 € / mois'),
-            _planChip('annuel', 'Annuel', '79.99 € / an'),
-            _planChip('pro', 'Pro', '14.99 € / mois'),
-          ],
+          children: _planLabels.entries.map(
+                (entry) => _planChip(entry.key, entry.value, '${_planPrices[entry.key]} € / ${entry.key == "yearly" ? "an" : "mois"}'),
+          ).toList(),
         ),
       ],
     );
@@ -170,8 +227,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
   }
 
   Widget _buildSummary() {
-    final price = _plan == 'annuel' ? 79.99 : _plan == 'pro' ? 14.99 : 9.99;
-    final label = _plan == 'annuel' ? 'Annuel' : _plan == 'pro' ? 'Pro' : 'Mensuel';
+    final price = _planPrices[_plan]!;
+    final label = _planLabels[_plan]!;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
