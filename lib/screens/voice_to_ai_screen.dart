@@ -5,6 +5,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 import 'dart:ui';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -106,7 +108,31 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
     print('Audio saved at: $_audioPath');
   }
 
+  Future<void> _sendAudioToBackend(String audioPath, double duration) async {
+    final uri = Uri.parse('http://localhost:5005/api/v1'); // Change to your backend endpoint
+    final request = http.MultipartRequest('POST', uri);
 
+    request.files.add(await http.MultipartFile.fromPath('audio', audioPath));
+    request.fields['duration'] = duration.toString();
+
+    final response = await request.send();
+
+    if (response.statusCode == 200) {
+      final resBody = await http.Response.fromStream(response);
+      final data = jsonDecode(resBody.body);
+
+      setState(() {
+        _messages.add(ChatMessage(
+          text: data['text'],
+          emotion: data['emotion'],
+          isUser: false,
+          timestamp: DateTime.now(),
+        ));
+      });
+    } else {
+      print('❌ Error uploading audio: ${response.statusCode}');
+    }
+  }
   Future<void> _processAudio() async {
     setState(() {
       _isProcessing = true;
@@ -122,39 +148,13 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
     });
     _scrollToBottom();
 
-    // Simulate AI response
-    await Future.delayed(const Duration(seconds: 2));
-    if (!mounted) return;
-
-    final responses = [
-      {
-        'emotion': 'anxiété',
-        'text': 'Je perçois de l\'anxiété dans votre voix. Prenez une profonde respiration. Voulez-vous essayer un exercice de relaxation ?',
-      },
-      {
-        'emotion': 'tristesse',
-        'text': 'Je sens de la tristesse. Il est normal de ressentir cela. Parlons-en ensemble, je suis là pour vous écouter.',
-      },
-      {
-        'emotion': 'joie',
-        'text': 'Votre voix rayonne de positivité ! C\'est merveilleux. Qu\'est-ce qui vous rend heureux aujourd\'hui ?',
-      },
-      {
-        'emotion': 'stress',
-        'text': 'Je détecte du stress. Essayons ensemble d\'identifier les sources et trouver des solutions pour vous apaiser.',
-      },
-    ];
-
-    final response = responses[math.Random().nextInt(responses.length)];
+    // Send audio to backend AI service
+    if (_audioPath != null) {
+      await _sendAudioToBackend(_audioPath!, _recordingDuration);
+    }
 
     setState(() {
       _isProcessing = false;
-      _messages.add(ChatMessage(
-        text: response['text']!,
-        isUser: false,
-        emotion: response['emotion']!,
-        timestamp: DateTime.now(),
-      ));
     });
     _scrollToBottom();
   }
