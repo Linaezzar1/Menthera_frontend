@@ -1,6 +1,9 @@
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
 import 'dart:ui';
 import 'dart:async';
 import 'dart:math' as math;
@@ -24,6 +27,9 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
 
   final ScrollController _scrollController = ScrollController();
   final List<ChatMessage> _messages = <ChatMessage>[];
+
+  final AudioRecorder _recorder = AudioRecorder();
+  String? _audioPath;
 
   @override
   void initState() {
@@ -58,41 +64,65 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
     super.dispose();
   }
 
-  void _toggleRecording() {
-    setState(() {
-      if (_isRecording) {
-        _isRecording = false;
-        _recordingTimer?.cancel();
-        _pulseController?.stop();
-        _breatheController?.stop();
-        _processAudio();
-      } else {
-        _isRecording = true;
-        _recordingDuration = 0.0;
-        _pulseController?.repeat(reverse: true);
-        _breatheController?.repeat(reverse: true);
-        _recordingTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
-          setState(() {
-            _recordingDuration += 0.1;
-          });
-        });
-      }
-    });
+  void _toggleRecording() async {
+    if (_isProcessing) return;
+
+    setState(() => _isRecording = !_isRecording);
+
+    if (_isRecording) {
+      await _startRecording();
+    } else {
+      await _stopRecording();
+      _processAudio();
+    }
   }
+
+  Future<void> _startRecording() async {
+    final hasPermission = await _recorder.hasPermission();
+    if (await hasPermission) {
+      _recordingDuration = 0.0;
+      _breatheController?.repeat(reverse: true);
+
+      _recordingTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
+        setState(() {
+          _recordingDuration += 0.1;
+        });
+      });
+
+      final path = 'recording_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      await _recorder.start(
+        const RecordConfig(encoder: AudioEncoder.aacLc), // ✅ Correct constant name
+        path: path,
+      );
+      _audioPath = path;
+    }
+  }
+
+  Future<void> _stopRecording() async {
+    _recordingTimer?.cancel();
+    _breatheController?.stop();
+
+    _audioPath = await _recorder.stop();
+    print('Audio saved at: $_audioPath');
+  }
+
 
   Future<void> _processAudio() async {
     setState(() {
       _isProcessing = true;
+
       _messages.add(ChatMessage(
-        text: 'Message vocal ${_recordingDuration.toStringAsFixed(1)}s',
+        text: 'Message vocal (${_recordingDuration.toStringAsFixed(1)}s)',
         isUser: true,
         emotion: '',
         timestamp: DateTime.now(),
         duration: _recordingDuration,
+        audioPath: _audioPath, // attach recorded file
       ));
     });
     _scrollToBottom();
 
+    // Simulate AI response
     await Future.delayed(const Duration(seconds: 2));
     if (!mounted) return;
 
@@ -115,8 +145,7 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
       },
     ];
 
-    final random = math.Random();
-    final response = responses[random.nextInt(responses.length)];
+    final response = responses[math.Random().nextInt(responses.length)];
 
     setState(() {
       _isProcessing = false;
@@ -308,17 +337,21 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Row(
-        mainAxisAlignment: message.isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment:
+        message.isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (!message.isUser) _buildAIAvatar(),
           if (!message.isUser) const SizedBox(width: 12),
           Flexible(
             child: Column(
-              crossAxisAlignment: message.isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              crossAxisAlignment: message.isUser
+                  ? CrossAxisAlignment.end
+                  : CrossAxisAlignment.start,
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.only(
                       topLeft: const Radius.circular(20),
@@ -328,16 +361,26 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
                     ),
                     gradient: LinearGradient(
                       colors: message.isUser
-                          ? [const Color(0xFF6B5FF8).withOpacity(0.9), const Color(0xFF00D4FF).withOpacity(0.8)]
-                          : [Colors.white.withOpacity(0.12), Colors.white.withOpacity(0.08)],
+                          ? [
+                        const Color(0xFF6B5FF8).withOpacity(0.9),
+                        const Color(0xFF00D4FF).withOpacity(0.8)
+                      ]
+                          : [
+                        Colors.white.withOpacity(0.12),
+                        Colors.white.withOpacity(0.08)
+                      ],
                     ),
                     border: Border.all(
-                      color: message.isUser ? const Color(0xFF6B5FF8).withOpacity(0.5) : Colors.white.withOpacity(0.2),
+                      color: message.isUser
+                          ? const Color(0xFF6B5FF8).withOpacity(0.5)
+                          : Colors.white.withOpacity(0.2),
                       width: 1.5,
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: message.isUser ? const Color(0xFF6B5FF8).withOpacity(0.3) : Colors.black.withOpacity(0.2),
+                        color: message.isUser
+                            ? const Color(0xFF6B5FF8).withOpacity(0.3)
+                            : Colors.black.withOpacity(0.2),
                         blurRadius: 15,
                         offset: const Offset(0, 5),
                       ),
@@ -350,13 +393,26 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          if (!message.isUser && message.emotion.isNotEmpty) _buildEmotionBadge(message.emotion),
-                          if (message.duration != null)
+                          if (!message.isUser && message.emotion.isNotEmpty)
+                            _buildEmotionBadge(message.emotion),
+
+                          // 🎧 Check if this message contains an audio file
+                          if (message.audioPath != null)
+                            _AudioPlayerWidget(
+                              audioPath: message.audioPath!,
+                              duration: message.duration ?? 0,
+                            )
+                          else if (message.duration != null)
                             _buildVoiceWave(message.duration!)
                           else
                             Text(
                               message.text,
-                              style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w400, color: Colors.white.withOpacity(0.95), height: 1.5),
+                              style: GoogleFonts.poppins(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w400,
+                                color: Colors.white.withOpacity(0.95),
+                                height: 1.5,
+                              ),
                             ),
                         ],
                       ),
@@ -364,7 +420,14 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
                   ),
                 ),
                 const SizedBox(height: 6),
-                Text(_formatTime(message.timestamp), style: GoogleFonts.spaceGrotesk(fontSize: 11, fontWeight: FontWeight.w400, color: Colors.white.withOpacity(0.5))),
+                Text(
+                  _formatTime(message.timestamp),
+                  style: GoogleFonts.spaceGrotesk(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w400,
+                    color: Colors.white.withOpacity(0.5),
+                  ),
+                ),
               ],
             ),
           ),
@@ -374,6 +437,7 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
       ),
     ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.2, end: 0);
   }
+
 
   Widget _buildAIAvatar() {
     return Container(
@@ -696,6 +760,7 @@ class ChatMessage {
   final String emotion;
   final DateTime timestamp;
   final double? duration;
+  final String? audioPath;
 
   ChatMessage({
     required this.text,
@@ -703,8 +768,107 @@ class ChatMessage {
     required this.emotion,
     required this.timestamp,
     this.duration,
+    this.audioPath,
   });
 }
+class _AudioPlayerWidget extends StatefulWidget {
+  final String audioPath;
+  final double duration;
+  const _AudioPlayerWidget({
+    required this.audioPath,
+    required this.duration,
+  });
+  @override
+  State<_AudioPlayerWidget> createState() => _AudioPlayerWidgetState();
+}
+
+class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
+  late AudioPlayer _player;
+
+  @override
+  void initState() {
+    super.initState();
+    _player = AudioPlayer();
+  }
+
+  @override
+  void dispose() {
+    _player.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        IconButton(
+          icon: Icon(Icons.play_arrow, color: Colors.white),
+          onPressed: () async {
+            await _player.play(DeviceFileSource(widget.audioPath));
+          },
+        ),
+        Text("${widget.duration.toStringAsFixed(1)} sec",
+            style: TextStyle(color: Colors.white70)),
+      ],
+    );
+  }
+}
+
+
+
+
+class AudioRecorderService {
+  final AudioRecorder _recorder = AudioRecorder();
+  Timer? _timer;
+  double _seconds = 0.0;
+
+  /// Callback to notify the UI about duration changes
+  Function(double)? onDurationChanged;
+
+  Future<bool> hasPermission() async {
+    return await _recorder.hasPermission();
+  }
+
+  Future<String?> startRecording() async {
+    if (await _recorder.hasPermission()) {
+      final dir = await getTemporaryDirectory();
+      final filePath =
+          '${dir.path}/recording_${DateTime.now().millisecondsSinceEpoch}.m4a';
+
+      await _recorder.start(
+        const RecordConfig(
+          encoder: AudioEncoder.aacLc,
+          bitRate: 128000,
+          sampleRate: 44100,
+        ),
+        path: filePath,
+      );
+
+      // Reset duration
+      _seconds = 0.0;
+
+      // Start timer for 0.1s precision (100 ms)
+      _timer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
+        _seconds += 0.1;
+        onDurationChanged?.call(double.parse(_seconds.toStringAsFixed(1)));
+      });
+
+      return filePath;
+    }
+    return null;
+  }
+
+  Future<String?> stopRecording() async {
+    _timer?.cancel();
+    _timer = null;
+    final path = await _recorder.stop();
+    return path;
+  }
+
+  double get duration => _seconds;
+}
+
+
 
 class _NeonButton extends StatelessWidget {
   final IconData icon;
