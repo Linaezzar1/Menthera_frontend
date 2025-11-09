@@ -1,22 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:projet_integration/services/auth_service.dart';
-
-class HistoryItem {
-  final String id;
-  final String emotion;
-  final double durationSec;
-  final DateTime date;
-  final String summary;
-
-  HistoryItem({
-    required this.id,
-    required this.emotion,
-    required this.durationSec,
-    required this.date,
-    required this.summary,
-  });
-}
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:ui';
+import '../utils/constants.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -26,17 +14,111 @@ class HistoryScreen extends StatefulWidget {
 }
 
 class _HistoryScreenState extends State<HistoryScreen> {
-  final List<HistoryItem> _all = [
-    HistoryItem(id: '1', emotion: 'anxiété', durationSec: 32.4, date: DateTime.now().subtract(const Duration(hours: 2)), summary: 'Exercice respiration proposé'),
-    HistoryItem(id: '2', emotion: 'joie', durationSec: 18.2, date: DateTime.now().subtract(const Duration(days: 1)), summary: 'Renforcement positif'),
-    HistoryItem(id: '3', emotion: 'stress', durationSec: 45.0, date: DateTime.now().subtract(const Duration(days: 3)), summary: 'Suggestions d’organisation'),
-  ];
-
+  List<dynamic> _allSessions = [];
+  bool _isLoading = true;
+  bool _isPremium = false;
+  int _displayed = 0;
+  int _total = 0;
+  String? _upgradeMessage;
   String _filter = 'toutes';
 
-  List<HistoryItem> get _filtered {
-    if (_filter == 'toutes') return _all;
-    return _all.where((e) => e.emotion == _filter).toList();
+  @override
+  void initState() {
+    super.initState();
+    _loadHistory();
+  }
+
+  Future<void> _loadHistory() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('access_token');
+
+      final response = await http.get(
+        Uri.parse('${AppConstants.apiBaseUrl}/api/v1/voice/sessions'),
+        headers: {
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        setState(() {
+          _allSessions = data['data']['sessions'] ?? [];
+          _isPremium = data['data']['isPremium'] ?? false;
+          _displayed = data['data']['displayed'] ?? 0;
+          _total = data['data']['total'] ?? 0;
+          _upgradeMessage = data['data']['message'];
+          _isLoading = false;
+        });
+      } else {
+        _showErrorSnackBar('Erreur de chargement');
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('Erreur: $e');
+      _showErrorSnackBar('Erreur de connexion');
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _deleteSession(String sessionId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('access_token');
+
+      final response = await http.delete(
+        Uri.parse('${AppConstants.apiBaseUrl}/api/v1/voice/sessions/$sessionId'),
+        headers: {
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        setState(() {
+          _allSessions.removeWhere((s) => s['_id'] == sessionId);
+        });
+        _showSuccessSnackBar('Session supprimée');
+      } else {
+        _showErrorSnackBar('Impossible de supprimer');
+      }
+    } catch (e) {
+      _showErrorSnackBar('Erreur de suppression');
+    }
+  }
+
+  List<dynamic> get _filteredSessions {
+    if (_filter == 'toutes') return _allSessions;
+    return _allSessions.where((s) =>
+    (s['emotion'] ?? 'neutre').toLowerCase() == _filter.toLowerCase()
+    ).toList();
+  }
+
+  void _showErrorSnackBar(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: const Color(0xFFFF6EC7),
+      ),
+    );
+  }
+
+  void _showSuccessSnackBar(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: const Color(0xFF00FF88),
+      ),
+    );
   }
 
   @override
@@ -47,13 +129,19 @@ class _HistoryScreenState extends State<HistoryScreen> {
           gradient: LinearGradient(
             begin: Alignment.topRight,
             end: Alignment.bottomLeft,
-            colors: [Color(0xFF0D0221), Color(0xFF1A0B2E), Color(0xFF2D1B4E), Color(0xFF4A2C6D)],
+            colors: [
+              Color(0xFF0D0221),
+              Color(0xFF1A0B2E),
+              Color(0xFF2D1B4E),
+              Color(0xFF4A2C6D)
+            ],
           ),
         ),
         child: SafeArea(
           child: Column(
             children: [
               _buildHeader(context),
+              if (_upgradeMessage != null) _buildUpgradeBanner(),
               _buildFilters(),
               Expanded(child: _buildList()),
             ],
@@ -61,7 +149,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => Navigator.pushNamed(context, '/voice_to_ai'),
+        onPressed: () => Navigator.pushNamed(context, '/voice'),
         icon: const Icon(Icons.mic_rounded),
         label: const Text('Nouvelle session'),
         backgroundColor: const Color(0xFF6B5FF8),
@@ -80,21 +168,95 @@ class _HistoryScreenState extends State<HistoryScreen> {
             icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
           ),
           const SizedBox(width: 6),
-          Text('Historique', style: GoogleFonts.orbitron(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700)),
-          const Spacer(),
-          IconButton(
-            onPressed: () => Navigator.pushNamed(context, '/payment'),
-            icon: const Icon(Icons.workspace_premium_rounded, color: Colors.white),
-            tooltip: 'S’abonner',
+          Text(
+            'Historique',
+            style: GoogleFonts.orbitron(
+              color: Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+            ),
           ),
+          const Spacer(),
+          if (!_isPremium)
+            IconButton(
+              onPressed: () => Navigator.pushNamed(context, '/payment'),
+              icon: const Icon(Icons.workspace_premium_rounded, color: Color(0xFFFFD700)),
+              tooltip: 'S\'abonner',
+            ),
+          IconButton(
+            onPressed: _loadHistory,
+            icon: const Icon(Icons.refresh_rounded, color: Colors.white),
+            tooltip: 'Actualiser',
+          ),
+        ],
+      ),
+    );
+  }
 
+  Widget _buildUpgradeBanner() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFFFF6EC7).withOpacity(0.2),
+            const Color(0xFF6B5FF8).withOpacity(0.2),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFFFF6EC7).withOpacity(0.5),
+          width: 1.5,
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.info_outline, color: Color(0xFFFFD700), size: 24),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _upgradeMessage!,
+                  style: GoogleFonts.spaceGrotesk(
+                    color: Colors.white,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                GestureDetector(
+                  onTap: () => Navigator.pushNamed(context, '/payment'),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFFF6EC7), Color(0xFF6B5FF8)],
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      'Passer à Premium',
+                      style: GoogleFonts.orbitron(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
   Widget _buildFilters() {
-    final emotions = ['toutes', 'anxiété', 'stress', 'tristesse', 'joie'];
+    final emotions = ['toutes', 'anxiété', 'stress', 'tristesse', 'joie', 'neutre'];
     return SizedBox(
       height: 48,
       child: ListView.separated(
@@ -111,7 +273,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
             onSelected: (_) => setState(() => _filter = e),
             selectedColor: const Color(0xFF6B5FF8),
             backgroundColor: Colors.white.withOpacity(0.12),
-            shape: StadiumBorder(side: BorderSide(color: selected ? Colors.white : Colors.white24)),
+            shape: StadiumBorder(
+              side: BorderSide(
+                color: selected ? Colors.white : Colors.white24,
+              ),
+            ),
           );
         },
       ),
@@ -119,82 +285,226 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Widget _buildList() {
-    if (_filtered.isEmpty) {
-      return Center(
-        child: Text('Aucun élément', style: GoogleFonts.poppins(color: Colors.white70)),
+    if (_isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(color: Color(0xFF00D4FF)),
       );
     }
-    return ListView.separated(
-      padding: const EdgeInsets.all(16),
-      itemCount: _filtered.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
-      itemBuilder: (context, i) {
-        final item = _filtered[i];
-        return InkWell(
-          onTap: () {
-            // TODO: Ouvrir le détail de la session
-          },
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              color: Colors.white.withOpacity(0.06),
-              border: Border.all(color: Colors.white24),
+
+    if (_filteredSessions.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.history, size: 64, color: Colors.white38),
+            const SizedBox(height: 16),
+            Text(
+              _filter == 'toutes'
+                  ? 'Aucune session enregistrée'
+                  : 'Aucune session avec cette émotion',
+              style: GoogleFonts.poppins(color: Colors.white70),
             ),
-            child: Row(
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadHistory,
+      color: const Color(0xFF00D4FF),
+      child: ListView.separated(
+        padding: const EdgeInsets.all(16),
+        itemCount: _filteredSessions.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 10),
+        itemBuilder: (context, i) {
+          final session = _filteredSessions[i];
+          return _buildSessionCard(session);
+        },
+      ),
+    );
+  }
+
+  Widget _buildSessionCard(dynamic session) {
+    final emotion = session['emotion'] ?? 'neutre';
+    final emotionColor = _getEmotionColor(emotion);
+
+    return InkWell(
+      onTap: () {
+        // TODO: Naviguer vers détail de session
+      },
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          gradient: LinearGradient(
+            colors: [
+              Colors.white.withOpacity(0.12),
+              Colors.white.withOpacity(0.08),
+            ],
+          ),
+          border: Border.all(color: emotionColor.withOpacity(0.5), width: 1.5),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _emotionBadge(item.emotion),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(item.summary, style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 4),
-                      Text(_formatMeta(item), style: GoogleFonts.poppins(color: Colors.white70, fontSize: 12)),
-                    ],
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _emotionBadge(emotion, emotionColor),
+                    Text(
+                      _formatDate(session['createdAt']),
+                      style: GoogleFonts.spaceGrotesk(
+                        color: Colors.white70,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
                 ),
-                IconButton(
-                  onPressed: () => setState(() => _all.removeWhere((x) => x.id == item.id)),
-                  icon: const Icon(Icons.delete_outline_rounded, color: Colors.white70),
-                  tooltip: 'Supprimer',
+                if (session['transcription'] != null) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    session['transcription'],
+                    style: GoogleFonts.poppins(
+                      color: Colors.white70,
+                      fontSize: 13,
+                      height: 1.5,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+                if (session['therapistResponse'] != null) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00D4FF).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: const Color(0xFF00D4FF).withOpacity(0.3),
+                      ),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.psychology,
+                            color: Color(0xFF00D4FF), size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            session['therapistResponse'],
+                            style: GoogleFonts.poppins(
+                              color: Colors.white,
+                              fontSize: 12,
+                              height: 1.4,
+                            ),
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    IconButton(
+                      onPressed: () => _confirmDelete(session['_id']),
+                      icon: const Icon(Icons.delete_outline_rounded,
+                          color: Colors.white70, size: 20),
+                      tooltip: 'Supprimer',
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
-  Widget _emotionBadge(String emotion) {
-    final map = {
-      'anxiété': const [Color(0xFFFFAA00), Color(0xFFFF6600)],
-      'tristesse': [const Color(0xFF6B8EFF), const Color(0xFF4A6FE8)],
-      'joie': [const Color(0xFF00FF88), const Color(0xFF00CC6A)],
-      'stress': [const Color(0xFFFF4466), const Color(0xFFFF2244)],
-      'toutes': [Colors.white70, Colors.white60],
-    };
-    final colors = map[emotion] ?? [Colors.white70, Colors.white60];
+  void _confirmDelete(String sessionId) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1A0B2E),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: Text(
+          'Supprimer la session ?',
+          style: GoogleFonts.orbitron(color: Colors.white),
+        ),
+        content: Text(
+          'Cette action est irréversible.',
+          style: GoogleFonts.poppins(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Annuler', style: GoogleFonts.spaceGrotesk(color: Colors.white70)),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _deleteSession(sessionId);
+            },
+            child: Text('Supprimer', style: GoogleFonts.spaceGrotesk(color: const Color(0xFFFF6EC7))),
+          ),
+        ],
+      ),
+    );
+  }
 
+  Widget _emotionBadge(String emotion, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
-        gradient: LinearGradient(colors: colors),
+        color: color.withOpacity(0.2),
+        border: Border.all(color: color, width: 1),
       ),
       child: Text(
         emotion.toUpperCase(),
-        style: GoogleFonts.spaceGrotesk(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 11, letterSpacing: 1),
+        style: GoogleFonts.spaceGrotesk(
+          color: color,
+          fontWeight: FontWeight.w700,
+          fontSize: 11,
+          letterSpacing: 1,
+        ),
       ),
     );
   }
 
-  String _formatMeta(HistoryItem i) {
-    final d = '${i.date.day.toString().padLeft(2, '0')}/${i.date.month.toString().padLeft(2, '0')}/${i.date.year}';
-    final t = '${i.date.hour.toString().padLeft(2, '0')}:${i.date.minute.toString().padLeft(2, '0')}';
-    return '$d • $t • ${i.durationSec.toStringAsFixed(1)}s';
+  Color _getEmotionColor(String emotion) {
+    switch (emotion.toLowerCase()) {
+      case 'joie':
+        return const Color(0xFF00FF88);
+      case 'tristesse':
+        return const Color(0xFF6B8EFF);
+      case 'anxiété':
+      case 'anxiete':
+      case 'stress':
+        return const Color(0xFFFFAA00);
+      case 'colère':
+      case 'colere':
+        return const Color(0xFFFF4466);
+      default:
+        return const Color(0xFF9B8FDB);
+    }
+  }
+
+  String _formatDate(String? date) {
+    if (date == null) return '';
+    final dt = DateTime.parse(date);
+    return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year} • ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
   }
 }

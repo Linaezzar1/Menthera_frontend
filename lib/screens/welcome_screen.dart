@@ -3,6 +3,11 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:ui';
 import 'dart:math' as math;
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../services/auth_service.dart';
+import '../utils/constants.dart';
 
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
@@ -12,11 +17,350 @@ class WelcomeScreen extends StatefulWidget {
 }
 
 class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateMixin {
+  bool _isLoggingOut = false;
+  bool _isVerifyingPayment = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkPaymentSuccess();
+  }
+
+  // Vérifier si on revient d'un paiement réussi
+  Future<void> _checkPaymentSuccess() async {
+    final uri = Uri.base;
+    final paymentSuccess = uri.queryParameters['payment_success'];
+    final sessionId = uri.queryParameters['session_id'];
+
+    if (paymentSuccess == 'true' && sessionId != null) {
+      setState(() {
+        _isVerifyingPayment = true;
+      });
+
+      await _verifyPaymentWithBackend(sessionId);
+
+      setState(() {
+        _isVerifyingPayment = false;
+      });
+    }
+  }
+
+  // Vérifier le paiement avec le backend
+  Future<void> _verifyPaymentWithBackend(String sessionId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('access_token');
+
+      final response = await http.post(
+        Uri.parse('${AppConstants.apiBaseUrl}/api/v1/billing/verify-session'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'session_id': sessionId}),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        if (data['success'] == true) {
+          _showSuccessSnackBar();
+        } else {
+          _showErrorSnackBar('Erreur de vérification du paiement');
+        }
+      } else {
+        _showErrorSnackBar('Impossible de vérifier le paiement');
+      }
+    } catch (e) {
+      print('Erreur vérification: $e');
+      _showErrorSnackBar('Erreur de connexion');
+    }
+  }
+
+  void _showSuccessSnackBar() {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.check_circle, color: Colors.white, size: 24),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Paiement réussi !',
+                    style: GoogleFonts.orbitron(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Votre abonnement premium est activé',
+                    style: GoogleFonts.spaceGrotesk(
+                      fontSize: 13,
+                      color: Colors.white.withOpacity(0.9),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: const Color(0xFF00D4FF),
+        duration: const Duration(seconds: 5),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        elevation: 8,
+      ),
+    );
+  }
+
+  void _showErrorSnackBar(String message) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.error_outline, color: Colors.white, size: 24),
+            const SizedBox(width: 12),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: const Color(0xFFFF6EC7),
+        duration: const Duration(seconds: 4),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+      ),
+    );
+  }
+
+  // Gérer la déconnexion
+  Future<void> _handleLogout() async {
+    final shouldLogout = await showDialog<bool>(
+      context: context,
+      builder: (context) => _buildLogoutDialog(context),
+    );
+
+    if (shouldLogout == true) {
+      setState(() {
+        _isLoggingOut = true;
+      });
+
+      try {
+        await AuthService.logout();
+        await Future.delayed(const Duration(milliseconds: 500));
+
+        if (mounted) {
+          Navigator.pushReplacementNamed(context, '/login');
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.white),
+                  const SizedBox(width: 12),
+                  Text('Erreur de déconnexion: $e'),
+                ],
+              ),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isLoggingOut = false;
+          });
+        }
+      }
+    }
+  }
+
+  // Dialog de confirmation de déconnexion
+  Widget _buildLogoutDialog(BuildContext context) {
+    return BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+      child: AlertDialog(
+        backgroundColor: const Color(0xFF1A0B2E),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: BorderSide(
+            color: Colors.white.withOpacity(0.2),
+            width: 1.5,
+          ),
+        ),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFFF6EC7), Color(0xFF6B5FF8)],
+                ),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.logout_rounded, color: Colors.white, size: 24),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'Déconnexion',
+              style: GoogleFonts.orbitron(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'Voulez-vous vraiment vous déconnecter ?',
+          style: GoogleFonts.spaceGrotesk(
+            fontSize: 15,
+            color: Colors.white.withOpacity(0.8),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(
+              'Annuler',
+              style: GoogleFonts.spaceGrotesk(
+                color: Colors.white.withOpacity(0.6),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Container(
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFFFF6EC7), Color(0xFF6B5FF8)],
+              ),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(
+                'Déconnexion',
+                style: GoogleFonts.spaceGrotesk(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Bouton de déconnexion
+  Widget _buildLogoutButton() {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withOpacity(0.15),
+            Colors.white.withOpacity(0.08),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.3),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFFF6EC7).withOpacity(0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: _handleLogout,
+              borderRadius: BorderRadius.circular(16),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ShaderMask(
+                      shaderCallback: (bounds) => const LinearGradient(
+                        colors: [Color(0xFFFF6EC7), Color(0xFF6B5FF8)],
+                      ).createShader(bounds),
+                      child: const Icon(
+                        Icons.logout_rounded,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Déconnexion',
+                      style: GoogleFonts.spaceGrotesk(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ).animate()
+        .fadeIn(duration: 800.ms, delay: 1400.ms)
+        .slideX(begin: 0.3, end: 0);
+  }
+
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
 
     return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: _buildLogoutButton(),
+          ),
+        ],
+      ),
+      extendBodyBehindAppBar: true,
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
@@ -59,6 +403,76 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
                 ),
               ),
             ),
+            // Overlay de vérification de paiement
+            if (_isVerifyingPayment)
+              Container(
+                color: Colors.black54,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(32),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1A0B2E),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.2),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const CircularProgressIndicator(
+                          color: Color(0xFF00D4FF),
+                        ),
+                        const SizedBox(height: 20),
+                        Text(
+                          'Vérification du paiement...',
+                          style: GoogleFonts.orbitron(
+                            fontSize: 16,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            // Overlay de déconnexion
+            if (_isLoggingOut)
+              Container(
+                color: Colors.black54,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(32),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1A0B2E),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.2),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const CircularProgressIndicator(
+                          color: Color(0xFFFF6EC7),
+                        ),
+                        const SizedBox(height: 20),
+                        Text(
+                          'Déconnexion...',
+                          style: GoogleFonts.orbitron(
+                            fontSize: 16,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
