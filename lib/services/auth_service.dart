@@ -13,6 +13,7 @@ class AuthService {
   static String? _email;
 
   static String? getAccessToken() => _accessToken;
+  static String? getRefreshToken() => _refreshTokenKey;
   static String? getEmail() => _email;
 
   static Future<void> initialize() async {

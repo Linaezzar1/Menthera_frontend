@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:http/http.dart' as http;
-import 'package:projet_integration/services/auth_service.dart';
-import 'dart:convert';
+import 'package:projet_integration/services/payment_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class PaymentScreen extends StatefulWidget {
@@ -28,7 +26,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
     'quarterly': 14.99,
     'yearly': 79.99,
   };
-
   Future<void> _continuePayment() async {
     setState(() {
       _isLoading = true;
@@ -36,31 +33,30 @@ class _PaymentScreenState extends State<PaymentScreen> {
     });
 
     try {
-      final token = AuthService.getAccessToken();
-      if (token == null) throw Exception("Token manquant, veuillez vous reconnecter.");
+      final result = await PaymentService.continuePayment(_plan);
+      final statusCode = result['code'];
+      final data = result['data'];
 
-      final response = await http.post(
-        Uri.parse('http://localhost:5000/api/v1/billing/checkout'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({'plan': _plan}),
-      );
-
-      final data = jsonDecode(response.body);
-
-      if (response.statusCode == 200 && data['data']?['url'] != null) {
-        await launchUrl(Uri.parse(data['data']['url']),
-            mode: LaunchMode.externalApplication);
+      if (statusCode == 200 && data['data']?['url'] != null) {
+        await launchUrl(
+          Uri.parse(data['data']['url']),
+          mode: LaunchMode.externalApplication,
+        );
       } else {
         setState(() {
-          _error = data['error'] ?? 'Erreur lors de la récupération du paiement.';
+          _error = data['error'] ??
+              data['message'] ??
+              (statusCode == 407
+                  ? "Votre abonnement est déjà actif. (status 407)"
+                  : statusCode == 400
+                  ? "Erreur dans votre demande (400)"
+                  : "Erreur inconnue (status $statusCode)");
         });
       }
     } catch (e) {
       setState(() {
-        _error = 'Erreur: $e';
+        _error =
+        "Impossible de se connecter au serveur. Vérifiez votre connexion internet.";
       });
     } finally {
       setState(() {
