@@ -385,26 +385,31 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        _SocialButton(
-          icon: Icons.g_mobiledata_rounded,
-          label: 'Google',
-          onTap: () async {
-            final url = Uri.parse('${AppConstants.apiBaseUrl}/api/v1/auth/google');
-            if (await canLaunchUrl(url)) {
-              await launchUrl(url, mode: LaunchMode.externalApplication);
-            }
-          },
+        // ✅ CORRECTION : Enveloppe chaque bouton dans Flexible
+        Flexible(
+          child: _SocialButton(
+            icon: Icons.g_mobiledata_rounded,
+            label: 'Google',
+            onTap: () async {
+              final url = Uri.parse('${AppConstants.apiBaseUrl}/api/v1/auth/google');
+              if (await canLaunchUrl(url)) {
+                await launchUrl(url, mode: LaunchMode.externalApplication);
+              }
+            },
+          ),
         ),
-        const SizedBox(width: 16),
-        _SocialButton(
-          icon: Icons.facebook_rounded,
-          label: 'Facebook',
-          onTap: () async {
-            final url = Uri.parse('${AppConstants.apiBaseUrl}/api/v1/auth/facebook');
-            if (await canLaunchUrl(url)) {
-              await launchUrl(url, mode: LaunchMode.externalApplication);
-            }
-          },
+        const SizedBox(width: 12),  // ✅ Réduit de 16 à 12
+        Flexible(
+          child: _SocialButton(
+            icon: Icons.facebook_rounded,
+            label: 'Facebook',
+            onTap: () async {
+              final url = Uri.parse('${AppConstants.apiBaseUrl}/api/v1/auth/facebook');
+              if (await canLaunchUrl(url)) {
+                await launchUrl(url, mode: LaunchMode.externalApplication);
+              }
+            },
+          ),
         ),
       ],
     ).animate()
@@ -508,15 +513,22 @@ class _SocialButton extends StatelessWidget {
               onTap: onTap,
               borderRadius: BorderRadius.circular(12),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),  // ✅ Réduit de 24 à 20
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(icon, color: Colors.white, size: 24),
-                    const SizedBox(width: 8),
-                    Text(
-                      label,
-                      style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.white),
+                    Icon(icon, color: Colors.white, size: 22),  // ✅ Réduit de 24 à 22
+                    const SizedBox(width: 6),  // ✅ Réduit de 8 à 6
+                    Flexible(  // ✅ Ajoute Flexible pour éviter l'overflow
+                      child: Text(
+                        label,
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,  // ✅ Réduit de 14 à 13
+                          fontWeight: FontWeight.w500,
+                          color: Colors.white,
+                        ),
+                        overflow: TextOverflow.ellipsis,  // ✅ Ajoute ellipsis si trop long
+                      ),
                     ),
                   ],
                 ),

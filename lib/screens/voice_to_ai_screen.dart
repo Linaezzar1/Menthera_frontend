@@ -9,6 +9,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:io';
+import '../services/voice_service.dart';
 
 class VoiceToAiScreen extends StatefulWidget {
   const VoiceToAiScreen({super.key});
@@ -20,7 +22,7 @@ class VoiceToAiScreen extends StatefulWidget {
 class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderStateMixin {
   bool _isRecording = false;
   bool _isProcessing = false;
-  bool _isHovering = false; // État hover
+  bool _isHovering = false;
   double _recordingDuration = 0.0;
   Timer? _recordingTimer;
   AnimationController? _pulseController;
@@ -28,7 +30,7 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
   Animation<double>? _breatheAnimation;
 
   final ScrollController _scrollController = ScrollController();
-  final List<ChatMessage> _messages = <ChatMessage>[];
+  List<ChatMessage> _messages = <ChatMessage>[];  // ✅ Enlevé 'final'
 
   final AudioRecorder _recorder = AudioRecorder();
   String? _audioPath;
@@ -63,6 +65,7 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
     _pulseController?.dispose();
     _breatheController?.dispose();
     _scrollController.dispose();
+    _recorder.dispose();
     super.dispose();
   }
 
@@ -81,7 +84,7 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
 
   Future<void> _startRecording() async {
     final hasPermission = await _recorder.hasPermission();
-    if (await hasPermission) {
+    if (hasPermission) {
       _recordingDuration = 0.0;
       _breatheController?.repeat(reverse: true);
 
@@ -91,12 +94,26 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
         });
       });
 
-      final path = 'recording_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      final directory = await getApplicationDocumentsDirectory();
+      final filePath = '${directory.path}/recording_${DateTime.now().millisecondsSinceEpoch}.m4a';
+
       await _recorder.start(
-        const RecordConfig(encoder: AudioEncoder.aacLc), // ✅ Correct constant name
-        path: path,
+        const RecordConfig(
+          encoder: AudioEncoder.aacLc,
+          bitRate: 128000,
+          sampleRate: 44100,
+        ),
+        path: filePath,
       );
-      _audioPath = path;
+      _audioPath = filePath;
+      print('🎤 Recording started: $_audioPath');
+    } else {
+      print('❌ Microphone permission denied');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Permission microphone refusée')),
+        );
+      }
     }
   }
 
@@ -105,34 +122,48 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
     _breatheController?.stop();
 
     _audioPath = await _recorder.stop();
-    print('Audio saved at: $_audioPath');
+    print('✅ Recording stopped: $_audioPath');
   }
 
   Future<void> _sendAudioToBackend(String audioPath, double duration) async {
-    final uri = Uri.parse('http://localhost:5005/api/v1'); // Change to your backend endpoint
-    final request = http.MultipartRequest('POST', uri);
+    try {
+      final data = await VoiceService.analyzeVoice(audioPath, duration);
 
-    request.files.add(await http.MultipartFile.fromPath('audio', audioPath));
-    request.fields['duration'] = duration.toString();
+      if (data != null) {
+        print('🎯 Données reçues de VoiceService: $data');
+        print('🎯 response field: ${data['response']}');
 
-    final response = await request.send();
-
-    if (response.statusCode == 200) {
-      final resBody = await http.Response.fromStream(response);
-      final data = jsonDecode(resBody.body);
-
+        setState(() {
+          _messages.add(ChatMessage(  // ✅ Corrigé : _messages au lieu de messages
+            text: data['response'] ?? 'Aucune réponse',
+            emotion: data['emotion'] ?? 'neutral',
+            isUser: false,
+            timestamp: DateTime.now(),
+          ));
+        });
+      } else {
+        setState(() {
+          _messages.add(ChatMessage(  // ✅ Corrigé
+            text: 'Erreur de connexion au serveur.',
+            emotion: 'neutral',
+            isUser: false,
+            timestamp: DateTime.now(),
+          ));
+        });
+      }
+    } catch (e) {
+      print('Error sending audio: $e');
       setState(() {
-        _messages.add(ChatMessage(
-          text: data['text'],
-          emotion: data['emotion'],
+        _messages.add(ChatMessage(  // ✅ Corrigé
+          text: 'Erreur: $e',
+          emotion: 'neutral',
           isUser: false,
           timestamp: DateTime.now(),
         ));
       });
-    } else {
-      print('❌ Error uploading audio: ${response.statusCode}');
     }
   }
+
   Future<void> _processAudio() async {
     setState(() {
       _isProcessing = true;
@@ -143,13 +174,12 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
         emotion: '',
         timestamp: DateTime.now(),
         duration: _recordingDuration,
-        audioPath: _audioPath, // attach recorded file
+        audioPath: _audioPath,
       ));
     });
     _scrollToBottom();
 
-    // Send audio to backend AI service
-    if (_audioPath != null) {
+    if (_audioPath != null && _audioPath!.isNotEmpty) {
       await _sendAudioToBackend(_audioPath!, _recordingDuration);
     }
 
@@ -173,8 +203,6 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-
     return Scaffold(
       body: Container(
         decoration: BoxDecoration(
@@ -283,7 +311,10 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          _NeonButton(icon: Icons.arrow_back_ios_new_rounded, onTap: () => Navigator.pushReplacementNamed(context, '/welcome')),
+          _NeonButton(
+            icon: Icons.arrow_back_ios_new_rounded,
+            onTap: () => Navigator.pushReplacementNamed(context, '/welcome'),
+          ),
           Row(
             children: [
               Container(
@@ -292,13 +323,32 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: const Color(0xFF00FF88),
-                  boxShadow: [BoxShadow(color: const Color(0xFF00FF88).withOpacity(0.8), blurRadius: 8, spreadRadius: 2)],
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF00FF88).withOpacity(0.8),
+                      blurRadius: 8,
+                      spreadRadius: 2,
+                    )
+                  ],
                 ),
-              ).animate(onPlay: (c) => c.repeat()).fadeOut(duration: 1000.ms).then().fadeIn(duration: 1000.ms),
+              ).animate(onPlay: (c) => c.repeat())
+                  .fadeOut(duration: 1000.ms)
+                  .then()
+                  .fadeIn(duration: 1000.ms),
               const SizedBox(width: 12),
               ShaderMask(
-                shaderCallback: (bounds) => const LinearGradient(colors: [Color(0xFFFF6EC7), Color(0xFF00D4FF)]).createShader(bounds),
-                child: Text('Menthera AI', style: GoogleFonts.orbitron(fontSize: 20, fontWeight: FontWeight.w700, color: Colors.white, letterSpacing: 1.5)),
+                shaderCallback: (bounds) => const LinearGradient(
+                  colors: [Color(0xFFFF6EC7), Color(0xFF00D4FF)],
+                ).createShader(bounds),
+                child: Text(
+                  'Menthera AI',
+                  style: GoogleFonts.orbitron(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                    letterSpacing: 1.5,
+                  ),
+                ),
               ),
             ],
           ),
@@ -337,21 +387,17 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Row(
-        mainAxisAlignment:
-        message.isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment: message.isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (!message.isUser) _buildAIAvatar(),
           if (!message.isUser) const SizedBox(width: 12),
           Flexible(
             child: Column(
-              crossAxisAlignment: message.isUser
-                  ? CrossAxisAlignment.end
-                  : CrossAxisAlignment.start,
+              crossAxisAlignment: message.isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
               children: [
                 Container(
-                  padding:
-                  const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.only(
                       topLeft: const Radius.circular(20),
@@ -396,7 +442,6 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
                           if (!message.isUser && message.emotion.isNotEmpty)
                             _buildEmotionBadge(message.emotion),
 
-                          // 🎧 Check if this message contains an audio file
                           if (message.audioPath != null)
                             _AudioPlayerWidget(
                               audioPath: message.audioPath!,
@@ -438,7 +483,6 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
     ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.2, end: 0);
   }
 
-
   Widget _buildAIAvatar() {
     return Container(
       width: 38,
@@ -446,11 +490,21 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
       padding: const EdgeInsets.all(2),
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        gradient: const LinearGradient(colors: [Color(0xFFFF6EC7), Color(0xFF6B5FF8), Color(0xFF00D4FF)]),
-        boxShadow: [BoxShadow(color: const Color(0xFF6B5FF8).withOpacity(0.5), blurRadius: 12)],
+        gradient: const LinearGradient(
+          colors: [Color(0xFFFF6EC7), Color(0xFF6B5FF8), Color(0xFF00D4FF)],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF6B5FF8).withOpacity(0.5),
+            blurRadius: 12,
+          )
+        ],
       ),
       child: Container(
-        decoration: const BoxDecoration(color: Color(0xFF0D0221), shape: BoxShape.circle),
+        decoration: const BoxDecoration(
+          color: Color(0xFF0D0221),
+          shape: BoxShape.circle,
+        ),
         padding: const EdgeInsets.all(6),
         child: Image.asset('assets/images/robot1.png', fit: BoxFit.contain),
       ),
@@ -463,8 +517,15 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
       height: 38,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        gradient: const LinearGradient(colors: [Color(0xFF6B5FF8), Color(0xFF00D4FF)]),
-        boxShadow: [BoxShadow(color: const Color(0xFF6B5FF8).withOpacity(0.4), blurRadius: 12)],
+        gradient: const LinearGradient(
+          colors: [Color(0xFF6B5FF8), Color(0xFF00D4FF)],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF6B5FF8).withOpacity(0.4),
+            blurRadius: 12,
+          )
+        ],
       ),
       child: const Icon(Icons.person_rounded, color: Colors.white, size: 22),
     );
@@ -486,7 +547,12 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
       decoration: BoxDecoration(
         gradient: LinearGradient(colors: colors),
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [BoxShadow(color: colors[0].withOpacity(0.4), blurRadius: 8)],
+        boxShadow: [
+          BoxShadow(
+            color: colors[0].withOpacity(0.4),
+            blurRadius: 8,
+          )
+        ],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -503,7 +569,15 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
             size: 16,
           ),
           const SizedBox(width: 6),
-          Text(emotion.toUpperCase(), style: GoogleFonts.spaceGrotesk(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white, letterSpacing: 1)),
+          Text(
+            emotion.toUpperCase(),
+            style: GoogleFonts.spaceGrotesk(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+              letterSpacing: 1,
+            ),
+          ),
         ],
       ),
     );
@@ -521,11 +595,21 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
             width: 3,
             height: 12 + (index % 4) * 6,
             margin: const EdgeInsets.symmetric(horizontal: 1.5),
-            decoration: BoxDecoration(color: Colors.white.withOpacity(0.7), borderRadius: BorderRadius.circular(2)),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.7),
+              borderRadius: BorderRadius.circular(2),
+            ),
           ),
         ),
         const SizedBox(width: 8),
-        Text('${duration.toStringAsFixed(1)}s', style: GoogleFonts.orbitron(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white.withOpacity(0.9))),
+        Text(
+          '${duration.toStringAsFixed(1)}s',
+          style: GoogleFonts.orbitron(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: Colors.white.withOpacity(0.9),
+          ),
+        ),
       ],
     );
   }
@@ -541,8 +625,16 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(20),
-              gradient: LinearGradient(colors: [Colors.white.withOpacity(0.12), Colors.white.withOpacity(0.08)]),
-              border: Border.all(color: Colors.white.withOpacity(0.2), width: 1.5),
+              gradient: LinearGradient(
+                colors: [
+                  Colors.white.withOpacity(0.12),
+                  Colors.white.withOpacity(0.08)
+                ],
+              ),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.2),
+                width: 1.5,
+              ),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -552,8 +644,12 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
                   width: 8,
                   height: 8,
                   margin: const EdgeInsets.symmetric(horizontal: 3),
-                  decoration: const BoxDecoration(color: Color(0xFF00D4FF), shape: BoxShape.circle),
-                ).animate(onPlay: (c) => c.repeat())
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF00D4FF),
+                    shape: BoxShape.circle,
+                  ),
+                )
+                    .animate(onPlay: (c) => c.repeat())
                     .fadeOut(duration: Duration(milliseconds: 600 + index * 200))
                     .then()
                     .fadeIn(duration: Duration(milliseconds: 600 + index * 200)),
@@ -569,8 +665,14 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        gradient: LinearGradient(colors: [Colors.transparent, Colors.black.withOpacity(0.3)], begin: Alignment.topCenter, end: Alignment.bottomCenter),
-        border: Border(top: BorderSide(color: Colors.white.withOpacity(0.1), width: 1)),
+        gradient: LinearGradient(
+          colors: [Colors.transparent, Colors.black.withOpacity(0.3)],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
+        border: Border(
+          top: BorderSide(color: Colors.white.withOpacity(0.1), width: 1),
+        ),
       ),
       child: Column(
         children: [
@@ -587,22 +689,60 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
-        gradient: LinearGradient(colors: [const Color(0xFFFF0055).withOpacity(0.2), const Color(0xFFFF0055).withOpacity(0.1)]),
-        border: Border.all(color: const Color(0xFFFF0055).withOpacity(0.5), width: 2),
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFFFF0055).withOpacity(0.2),
+            const Color(0xFFFF0055).withOpacity(0.1)
+          ],
+        ),
+        border: Border.all(
+          color: const Color(0xFFFF0055).withOpacity(0.5),
+          width: 2,
+        ),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(children: [
-            Container(
-              width: 10,
-              height: 10,
-              decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFFFF0055), boxShadow: [BoxShadow(color: Color(0xFFFF0055), blurRadius: 10, spreadRadius: 2)]),
-            ).animate(onPlay: (c) => c.repeat()).fadeOut(duration: 700.ms).then().fadeIn(duration: 700.ms),
-            const SizedBox(width: 12),
-            Text('Recording...', style: GoogleFonts.spaceGrotesk(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white)),
-          ]),
-          Text('${_recordingDuration.toStringAsFixed(1)}s', style: GoogleFonts.orbitron(fontSize: 18, fontWeight: FontWeight.w700, color: const Color(0xFFFF6EC7))),
+          Row(
+            children: [
+              Container(
+                width: 10,
+                height: 10,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Color(0xFFFF0055),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Color(0xFFFF0055),
+                      blurRadius: 10,
+                      spreadRadius: 2,
+                    )
+                  ],
+                ),
+              )
+                  .animate(onPlay: (c) => c.repeat())
+                  .fadeOut(duration: 700.ms)
+                  .then()
+                  .fadeIn(duration: 700.ms),
+              const SizedBox(width: 12),
+              Text(
+                'Recording...',
+                style: GoogleFonts.spaceGrotesk(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+          Text(
+            '${_recordingDuration.toStringAsFixed(1)}s',
+            style: GoogleFonts.orbitron(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFFFF6EC7),
+            ),
+          ),
         ],
       ),
     );
@@ -622,7 +762,6 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
             alignment: Alignment.center,
             clipBehavior: Clip.none,
             children: [
-              // Glow extérieur au hover
               if (_isHovering && !_isRecording)
                 Container(
                   height: 90,
@@ -642,19 +781,18 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
                       ),
                     ],
                   ),
-                ).animate(onPlay: (c) => c.repeat(reverse: true))
+                )
+                    .animate(onPlay: (c) => c.repeat(reverse: true))
                     .fadeIn(duration: 800.ms)
                     .then()
                     .fadeOut(duration: 800.ms),
 
-              // Ondes pendant l'enregistrement
               if (_isRecording) ...[
                 _buildPulseWave(scale: 1.3, delay: 0, opacity: 0.4),
                 _buildPulseWave(scale: 1.5, delay: 600, opacity: 0.25),
                 _buildPulseWave(scale: 1.7, delay: 1200, opacity: 0.15),
               ],
 
-              // Bouton principal
               AnimatedBuilder(
                 animation: _breatheAnimation ?? const AlwaysStoppedAnimation(1.0),
                 builder: (context, child) {
@@ -670,8 +808,16 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
                           colors: _isRecording
                               ? [const Color(0xFFFF0055), const Color(0xFFFF3366)]
                               : _isHovering
-                              ? [const Color(0xFF00D4FF), const Color(0xFFFF6EC7), const Color(0xFF6B5FF8)]
-                              : [const Color(0xFFFF6EC7), const Color(0xFF6B5FF8), const Color(0xFF00D4FF)],
+                              ? [
+                            const Color(0xFF00D4FF),
+                            const Color(0xFFFF6EC7),
+                            const Color(0xFF6B5FF8)
+                          ]
+                              : [
+                            const Color(0xFFFF6EC7),
+                            const Color(0xFF6B5FF8),
+                            const Color(0xFF00D4FF)
+                          ],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),
@@ -682,15 +828,27 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
                                 : _isHovering
                                 ? const Color(0xFF00D4FF)
                                 : const Color(0xFF6B5FF8))
-                                .withOpacity(_isRecording ? 0.6 : _isHovering ? 0.7 : 0.4),
-                            blurRadius: _isRecording ? 25 : _isHovering ? 30 : 20,
-                            spreadRadius: _isRecording ? 3 : _isHovering ? 4 : 2,
+                                .withOpacity(_isRecording
+                                ? 0.6
+                                : _isHovering
+                                ? 0.7
+                                : 0.4),
+                            blurRadius: _isRecording
+                                ? 25
+                                : _isHovering
+                                ? 30
+                                : 20,
+                            spreadRadius: _isRecording
+                                ? 3
+                                : _isHovering
+                                ? 4
+                                : 2,
                           ),
                           if (_isRecording)
                             BoxShadow(
-                                color: const Color(0xFFFF0055).withOpacity(0.3),
-                                blurRadius: 40,
-                                spreadRadius: 10
+                              color: const Color(0xFFFF0055).withOpacity(0.3),
+                              blurRadius: 40,
+                              spreadRadius: 10,
                             ),
                           if (_isHovering && !_isRecording)
                             BoxShadow(
@@ -705,9 +863,9 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
                         duration: const Duration(milliseconds: 300),
                         curve: Curves.easeOutCubic,
                         child: Icon(
-                            _isRecording ? Icons.stop_rounded : Icons.mic_rounded,
-                            color: Colors.white,
-                            size: 34
+                          _isRecording ? Icons.stop_rounded : Icons.mic_rounded,
+                          color: Colors.white,
+                          size: 34,
                         ),
                       ),
                     ),
@@ -721,7 +879,11 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
     );
   }
 
-  Widget _buildPulseWave({required double scale, required int delay, required double opacity}) {
+  Widget _buildPulseWave({
+    required double scale,
+    required int delay,
+    required double opacity,
+  }) {
     return TweenAnimationBuilder<double>(
       key: ValueKey('$scale-$delay-${DateTime.now().millisecondsSinceEpoch % 1000}'),
       tween: Tween(begin: 1.0, end: scale),
@@ -739,7 +901,10 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
             height: 70,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(color: const Color(0xFFFF0055).withOpacity(currentOpacity.clamp(0.0, opacity)), width: 2.5),
+              border: Border.all(
+                color: const Color(0xFFFF0055).withOpacity(currentOpacity.clamp(0.0, opacity)),
+                width: 2.5,
+              ),
             ),
           ),
         );
@@ -753,6 +918,8 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
     return '$hour:$minute';
   }
 }
+
+// ==================== CLASSES AUXILIAIRES ====================
 
 class ChatMessage {
   final String text;
@@ -771,24 +938,33 @@ class ChatMessage {
     this.audioPath,
   });
 }
+
 class _AudioPlayerWidget extends StatefulWidget {
   final String audioPath;
   final double duration;
+
   const _AudioPlayerWidget({
     required this.audioPath,
     required this.duration,
   });
+
   @override
   State<_AudioPlayerWidget> createState() => _AudioPlayerWidgetState();
 }
 
 class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
   late AudioPlayer _player;
+  bool _isPlaying = false;
 
   @override
   void initState() {
     super.initState();
     _player = AudioPlayer();
+    _player.onPlayerComplete.listen((event) {
+      if (mounted) {
+        setState(() => _isPlaying = false);
+      }
+    });
   }
 
   @override
@@ -800,75 +976,37 @@ class _AudioPlayerWidgetState extends State<_AudioPlayerWidget> {
   @override
   Widget build(BuildContext context) {
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
         IconButton(
-          icon: Icon(Icons.play_arrow, color: Colors.white),
+          icon: Icon(
+            _isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled,
+            color: Colors.white,
+            size: 32,
+          ),
           onPressed: () async {
-            await _player.play(DeviceFileSource(widget.audioPath));
+            if (_isPlaying) {
+              await _player.pause();
+              setState(() => _isPlaying = false);
+            } else {
+              await _player.play(DeviceFileSource(widget.audioPath));
+              setState(() => _isPlaying = true);
+            }
           },
         ),
-        Text("${widget.duration.toStringAsFixed(1)} sec",
-            style: TextStyle(color: Colors.white70)),
+        const SizedBox(width: 8),
+        Text(
+          "${widget.duration.toStringAsFixed(1)}s",
+          style: GoogleFonts.orbitron(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Colors.white.withOpacity(0.9),
+          ),
+        ),
       ],
     );
   }
 }
-
-
-
-
-class AudioRecorderService {
-  final AudioRecorder _recorder = AudioRecorder();
-  Timer? _timer;
-  double _seconds = 0.0;
-
-  /// Callback to notify the UI about duration changes
-  Function(double)? onDurationChanged;
-
-  Future<bool> hasPermission() async {
-    return await _recorder.hasPermission();
-  }
-
-  Future<String?> startRecording() async {
-    if (await _recorder.hasPermission()) {
-      final dir = await getTemporaryDirectory();
-      final filePath =
-          '${dir.path}/recording_${DateTime.now().millisecondsSinceEpoch}.m4a';
-
-      await _recorder.start(
-        const RecordConfig(
-          encoder: AudioEncoder.aacLc,
-          bitRate: 128000,
-          sampleRate: 44100,
-        ),
-        path: filePath,
-      );
-
-      // Reset duration
-      _seconds = 0.0;
-
-      // Start timer for 0.1s precision (100 ms)
-      _timer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
-        _seconds += 0.1;
-        onDurationChanged?.call(double.parse(_seconds.toStringAsFixed(1)));
-      });
-
-      return filePath;
-    }
-    return null;
-  }
-
-  Future<String?> stopRecording() async {
-    _timer?.cancel();
-    _timer = null;
-    final path = await _recorder.stop();
-    return path;
-  }
-
-  double get duration => _seconds;
-}
-
-
 
 class _NeonButton extends StatelessWidget {
   final IconData icon;
@@ -881,8 +1019,16 @@ class _NeonButton extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
-        gradient: LinearGradient(colors: [Colors.white.withOpacity(0.08), Colors.white.withOpacity(0.03)]),
-        border: Border.all(color: const Color(0xFF6B5FF8).withOpacity(0.4), width: 1.5),
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withOpacity(0.08),
+            Colors.white.withOpacity(0.03)
+          ],
+        ),
+        border: Border.all(
+          color: const Color(0xFF6B5FF8).withOpacity(0.4),
+          width: 1.5,
+        ),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
