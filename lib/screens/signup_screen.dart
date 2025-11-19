@@ -427,24 +427,29 @@ class _SignupScreenState extends State<SignupScreen> with TickerProviderStateMix
         .shimmer(duration: 2000.ms, delay: 1400.ms, color: Colors.white.withOpacity(0.3));
   }
 
+  // ✅ CORRECTION : Boutons sociaux avec Flexible pour éviter l'overflow
   Widget _buildSocialButtons() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        _SocialButton(
-          icon: Icons.g_mobiledata_rounded,
-          label: 'Google',
-          onTap: () {
-            // Implémenter Google sign-in (redirection vers /api/v1/auth/google)
-          },
+        Flexible(  // ✅ Ajouté
+          child: _SocialButton(
+            icon: Icons.g_mobiledata_rounded,
+            label: 'Google',
+            onTap: () {
+              // Implémenter Google sign-in
+            },
+          ),
         ),
-        const SizedBox(width: 16),
-        _SocialButton(
-          icon: Icons.facebook_rounded,
-          label: 'Facebook',
-          onTap: () {
-            // Implémenter Facebook sign-in (redirection vers /api/v1/auth/facebook)
-          },
+        const SizedBox(width: 12),  // ✅ Réduit de 16 à 12
+        Flexible(  // ✅ Ajouté
+          child: _SocialButton(
+            icon: Icons.facebook_rounded,
+            label: 'Facebook',
+            onTap: () {
+              // Implémenter Facebook sign-in
+            },
+          ),
         ),
       ],
     ).animate()
@@ -523,6 +528,7 @@ class _ModernInputField extends StatelessWidget {
   }
 }
 
+// ✅ CORRECTION : Classe _SocialButton optimisée
 class _SocialButton extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -548,15 +554,22 @@ class _SocialButton extends StatelessWidget {
               onTap: onTap,
               borderRadius: BorderRadius.circular(12),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),  // ✅ Réduit de 24 à 20
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(icon, color: Colors.white, size: 24),
-                    const SizedBox(width: 8),
-                    Text(
-                      label,
-                      style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.white),
+                    Icon(icon, color: Colors.white, size: 22),  // ✅ Réduit de 24 à 22
+                    const SizedBox(width: 6),  // ✅ Réduit de 8 à 6
+                    Flexible(  // ✅ Ajouté pour gérer le texte long
+                      child: Text(
+                        label,
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,  // ✅ Réduit de 14 à 13
+                          fontWeight: FontWeight.w500,
+                          color: Colors.white,
+                        ),
+                        overflow: TextOverflow.ellipsis,  // ✅ Ajouté
+                      ),
                     ),
                   ],
                 ),

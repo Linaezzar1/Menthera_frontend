@@ -5,20 +5,22 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:jwt_decoder/jwt_decoder.dart';
 
 class AuthService {
-  static const String _baseUrl = 'http://192.168.1.70:5000/api/v1/auth';
+  static const String _baseUrl = 'http://172.16.26.19:5000/api/v1/auth';
   static const String _accessTokenKey = 'access_token';
   static const String _refreshTokenKey = 'refresh_token';
 
   static String? _accessToken;
   static String? _email;
+  static String? _refreshToken;
 
   static String? getAccessToken() => _accessToken;
-  static String? getRefreshToken() => _refreshTokenKey;
+  static String? getRefreshToken() => _refreshToken;
   static String? getEmail() => _email;
 
   static Future<void> initialize() async {
     final prefs = await SharedPreferences.getInstance();
     _accessToken = prefs.getString(_accessTokenKey);
+    _refreshToken = prefs.getString(_refreshTokenKey);
   }
 
   static Future<Map<String, dynamic>> signup(

@@ -30,10 +30,12 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
   Animation<double>? _breatheAnimation;
 
   final ScrollController _scrollController = ScrollController();
-  List<ChatMessage> _messages = <ChatMessage>[];  // ✅ Enlevé 'final'
+  List<ChatMessage> _messages = <ChatMessage>[];
 
   final AudioRecorder _recorder = AudioRecorder();
   String? _audioPath;
+
+  int? _sessionMlId; // <-- Stocke l'ID de session ML pour réutilisation
 
   @override
   void initState() {
@@ -78,7 +80,7 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
       await _startRecording();
     } else {
       await _stopRecording();
-      _processAudio();
+      await _processAudio();
     }
   }
 
@@ -127,47 +129,69 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
 
   Future<void> _sendAudioToBackend(String audioPath, double duration) async {
     try {
-      final data = await VoiceService.analyzeVoice(audioPath, duration);
+      final data = await VoiceService.analyzeVoice(audioPath, duration, sessionMlId: _sessionMlId);
 
       if (data != null) {
-        print('🎯 Données reçues de VoiceService: $data');
-        print('🎯 response field: ${data['response']}');
+        if (data['session_id'] != null) {
+          _sessionMlId = data['session_id'] is int ? data['session_id'] : int.tryParse(data['session_id'].toString());
+        }
 
-        setState(() {
-          _messages.add(ChatMessage(  // ✅ Corrigé : _messages au lieu de messages
-            text: data['response'] ?? 'Aucune réponse',
-            emotion: data['emotion'] ?? 'neutral',
-            isUser: false,
-            timestamp: DateTime.now(),
-          ));
-        });
+        // Récupérer tout le tableau des messages (user + assistant)
+        final messagesFromServer = data['messages']; // À adapter selon votre API
+
+        if (messagesFromServer is List) {
+          setState(() {
+            _messages = messagesFromServer.map((msg) {
+              final role = msg['role'] as String? ?? 'assistant';
+              return ChatMessage(
+                text: (msg['stt']?['text'] ?? msg['text'] ?? ''),
+                emotion: msg['emotionAtTurn'] ?? 'neutral',
+                isUser: role == 'user',
+                timestamp: DateTime.tryParse(msg['createdAt']?['\$date'] ?? '') ?? DateTime.now(),
+                duration: msg['durationSec']?.toDouble(),
+                audioPath: msg['filePath'],
+              );
+            }).toList();
+          });
+        } else {
+          // Fallback si messages absents : prendre response simple
+          final respText = data['response'] ?? 'Aucune réponse';
+          setState(() {
+            _messages.add(ChatMessage(
+              text: respText,
+              emotion: data['emotion'] ?? 'neutral',
+              isUser: false,
+              timestamp: DateTime.now(),
+            ));
+          });
+        }
+
+        _scrollToBottom();
       } else {
-        setState(() {
-          _messages.add(ChatMessage(  // ✅ Corrigé
-            text: 'Erreur de connexion au serveur.',
-            emotion: 'neutral',
-            isUser: false,
-            timestamp: DateTime.now(),
-          ));
-        });
+        _addErrorMessage('Erreur de connexion au serveur.');
       }
     } catch (e) {
-      print('Error sending audio: $e');
-      setState(() {
-        _messages.add(ChatMessage(  // ✅ Corrigé
-          text: 'Erreur: $e',
-          emotion: 'neutral',
-          isUser: false,
-          timestamp: DateTime.now(),
-        ));
-      });
+      _addErrorMessage('Erreur: $e');
     }
+  }
+
+  void _addErrorMessage(String message) {
+    setState(() {
+      _messages.add(ChatMessage(
+        text: message,
+        emotion: 'neutral',
+        isUser: false,
+        timestamp: DateTime.now(),
+      ));
+    });
+    _scrollToBottom();
   }
 
   Future<void> _processAudio() async {
     setState(() {
       _isProcessing = true;
 
+      // Ajoute le message utilisateur avec audio
       _messages.add(ChatMessage(
         text: 'Message vocal (${_recordingDuration.toStringAsFixed(1)}s)',
         isUser: true,

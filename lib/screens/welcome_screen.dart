@@ -786,25 +786,29 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
         child: InkWell(
           onTap: () => Navigator.pushNamed(context, '/voice'),
           borderRadius: BorderRadius.circular(32),
+          // 🟣 Le point-clé: FittedBox
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.play_circle_filled_rounded, color: Colors.white, size: 28),
-                const SizedBox(width: 14),
-                Text(
-                  'Start Your Journey',
-                  style: GoogleFonts.spaceGrotesk(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                    letterSpacing: 1,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.play_circle_filled_rounded, color: Colors.white, size: 24),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Start Your Journey',
+                    style: GoogleFonts.spaceGrotesk(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                      letterSpacing: 1,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 24),
-              ],
+                  const SizedBox(width: 4),
+                  const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 20),
+                ],
+              ),
             ),
           ),
         ),
@@ -815,6 +819,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> with TickerProviderStateM
         .then(delay: 1500.ms)
         .shimmer(duration: 2500.ms, color: Colors.white.withOpacity(0.5));
   }
+
 }
 
 class _ModernFeatureCard extends StatelessWidget {
