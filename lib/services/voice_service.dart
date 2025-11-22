@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:projet_integration/services/auth_service.dart';
 
 class VoiceService {
-  static const String baseUrl = 'http://172.16.26.19:5000';
+  static const String baseUrl = 'http://192.168.1.18:5000';
 
   static Future<Map<String, dynamic>?> analyzeVoice(
       String audioPath,
@@ -14,7 +14,7 @@ class VoiceService {
       final token = AuthService.getAccessToken();
 
       if (token == null || token.isEmpty) {
-        print('❌ Pas de token - Utilisateur non connecté');
+        print(' Pas de token - Utilisateur non connecté');
         return {
           'response': 'Veuillez vous connecter pour utiliser cette fonctionnalité',
           'emotion': 'neutral',
