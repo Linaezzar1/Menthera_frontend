@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:jwt_decoder/jwt_decoder.dart';
 
 class AuthService {
-  static const String _baseUrl = 'http://172.16.26.19:5000/api/v1/auth';
+  static const String _baseUrl = 'http://127.0.0.1:5000/api/v1/auth';
   static const String _accessTokenKey = 'access_token';
   static const String _refreshTokenKey = 'refresh_token';
 

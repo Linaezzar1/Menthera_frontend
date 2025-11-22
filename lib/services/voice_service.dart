@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:projet_integration/services/auth_service.dart';
 
 class VoiceService {
-  static const String baseUrl = 'http://172.16.26.19:5000';
+  static const String baseUrl = 'http://127.0.0.1:5000';
 
   static Future<Map<String, dynamic>?> analyzeVoice(
       String audioPath,
