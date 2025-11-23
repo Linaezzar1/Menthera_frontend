@@ -323,8 +323,10 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
   }
 
   Widget _buildModernAppBar(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [Colors.black.withOpacity(0.3), Colors.transparent],
@@ -333,55 +335,68 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
         ),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // BACK BUTTON (unchanged)
+          // BACK BUTTON
           _NeonButton(
             icon: Icons.arrow_back_ios_new_rounded,
             onTap: () => Navigator.pushReplacementNamed(context, '/welcome'),
           ),
 
-          // TITLE + ONLINE DOT (unchanged)
-          Row(
-            children: [
-              Container(
-                width: 10,
-                height: 10,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: const Color(0xFF00FF88),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF00FF88).withOpacity(0.8),
-                      blurRadius: 8,
-                      spreadRadius: 2,
-                    )
-                  ],
-                ),
-              )
-                  .animate(onPlay: (c) => c.repeat())
-                  .fadeOut(duration: 1000.ms)
-                  .then()
-                  .fadeIn(duration: 1000.ms),
-              const SizedBox(width: 12),
-              ShaderMask(
-                shaderCallback: (bounds) => const LinearGradient(
-                  colors: [Color(0xFFFF6EC7), Color(0xFF00D4FF)],
-                ).createShader(bounds),
-                child: Text(
-                  'Menthera AI',
-                  style: GoogleFonts.orbitron(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                    letterSpacing: 1.5,
+          const SizedBox(width: 8),
+
+          // TITRE FLEXIBLE AU CENTRE
+          Expanded(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFF00FF88),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF00FF88).withOpacity(0.8),
+                        blurRadius: 8,
+                        spreadRadius: 2,
+                      )
+                    ],
+                  ),
+                )
+                    .animate(onPlay: (c) => c.repeat())
+                    .fadeOut(duration: 1000.ms)
+                    .then()
+                    .fadeIn(duration: 1000.ms),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: ShaderMask(
+                    shaderCallback: (bounds) => const LinearGradient(
+                      colors: [Color(0xFFFF6EC7), Color(0xFF00D4FF)],
+                    ).createShader(bounds),
+                    child: Text(
+                      'Menthera AI',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.orbitron(
+                        fontSize: width < 340 ? 16 : 20,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
 
+          const SizedBox(width: 8),
+
+          // ACTIONS (NOTIF + MENU) COMPACITES
           Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               Stack(
                 clipBehavior: Clip.none,
@@ -394,8 +409,8 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
                     right: -2,
                     top: -2,
                     child: Container(
-                      width: 10,
-                      height: 10,
+                      width: 9,
+                      height: 9,
                       decoration: const BoxDecoration(
                         color: Color(0xFFFF3366),
                         shape: BoxShape.circle,
@@ -404,7 +419,7 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
                   ),
                 ],
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
               Builder(
                 builder: (ctx) => _NeonButton(
                   icon: Icons.menu_rounded,

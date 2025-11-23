@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../services/auth_service.dart'; // ajuste si besoin
+import 'package:url_launcher/url_launcher.dart';
+import '../services/auth_service.dart';
+import '../utils/constants.dart'; // pour AppConstants.apiBaseUrl
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -50,6 +52,48 @@ class _SignupScreenState extends State<SignupScreen> {
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  // Boutons sociaux (même logique que sur LoginScreen)
+  Widget _buildSocialButtons() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Flexible(
+          child: _SocialButton(
+            icon: Icons.g_mobiledata_rounded,
+            label: 'Google',
+            onTap: () async {
+              final url = Uri.parse('http://192.168.1.18:5000/api/v1/auth/google');
+              if (await canLaunchUrl(url)) {
+                await launchUrl(url, mode: LaunchMode.externalApplication);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Impossible d’ouvrir Google')),
+                );
+              }
+            },
+          ),
+        ),
+        const SizedBox(width: 8),
+        Flexible(
+          child: _SocialButton(
+            icon: Icons.facebook_rounded,
+            label: 'Facebook',
+            onTap: () async {
+              final url = Uri.parse('${AppConstants.apiBaseUrl}/api/v1/auth/facebook');
+              if (await canLaunchUrl(url)) {
+                await launchUrl(url, mode: LaunchMode.externalApplication);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Impossible d’ouvrir Facebook')),
+                );
+              }
+            },
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -117,7 +161,7 @@ class _SignupScreenState extends State<SignupScreen> {
                 keyboardType: TextInputType.emailAddress,
                 obscureText: false,
               ),
-              SizedBox(height: 8),
+              const SizedBox(height: 8),
               _buildInputField(
                 controller: _usernameController,
                 label: 'Nom d\'utilisateur',
@@ -130,7 +174,7 @@ class _SignupScreenState extends State<SignupScreen> {
                 },
                 obscureText: false,
               ),
-              SizedBox(height: 8),
+              const SizedBox(height: 8),
               _buildInputField(
                 controller: _passwordController,
                 label: 'Mot de passe',
@@ -150,7 +194,7 @@ class _SignupScreenState extends State<SignupScreen> {
                   onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
                 ),
               ),
-              SizedBox(height: 8),
+              const SizedBox(height: 8),
               _buildInputField(
                 controller: _confirmPasswordController,
                 label: 'Confirmer mot de passe',
@@ -169,14 +213,16 @@ class _SignupScreenState extends State<SignupScreen> {
                         : Icons.visibility_off_outlined,
                     color: Colors.white.withOpacity(0.7),
                   ),
-                  onPressed: () => setState(() => _isConfirmPasswordVisible = !_isConfirmPasswordVisible),
+                  onPressed: () => setState(
+                        () => _isConfirmPasswordVisible = !_isConfirmPasswordVisible,
+                  ),
                 ),
               ),
-              SizedBox(height: 14),
+              const SizedBox(height: 14),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  backgroundColor: Color(0xFF6B5FA8),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  backgroundColor: const Color(0xFF6B5FA8),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                   ),
@@ -184,16 +230,19 @@ class _SignupScreenState extends State<SignupScreen> {
                 ),
                 onPressed: _isLoading ? null : _handleSignUp,
                 child: _isLoading
-                    ? CircularProgressIndicator(color: Colors.white)
+                    ? const CircularProgressIndicator(color: Colors.white)
                     : Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
                       'Créer mon compte',
-                      style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600),
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                    SizedBox(width: 6),
-                    Icon(Icons.arrow_forward_rounded),
+                    const SizedBox(width: 6),
+                    const Icon(Icons.arrow_forward_rounded),
                   ],
                 ),
               ),
@@ -201,33 +250,17 @@ class _SignupScreenState extends State<SignupScreen> {
           ),
         ),
         SizedBox(height: clavierOuvert ? 8 : 12),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Flexible(
-              child: _SocialButton(
-                icon: Icons.g_mobiledata_rounded,
-                label: 'Google',
-                onTap: () {},
-              ),
-            ),
-            SizedBox(width: 8),
-            Flexible(
-              child: _SocialButton(
-                icon: Icons.facebook_rounded,
-                label: 'Facebook',
-                onTap: () {},
-              ),
-            ),
-          ],
-        ),
+        _buildSocialButtons(),
         SizedBox(height: clavierOuvert ? 4 : 8),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
               'Déjà un compte ? ',
-              style: GoogleFonts.poppins(fontSize: 13, color: Colors.white.withOpacity(0.85)),
+              style: GoogleFonts.poppins(
+                fontSize: 13,
+                color: Colors.white.withOpacity(0.85),
+              ),
             ),
             GestureDetector(
               onTap: () => Navigator.pushReplacementNamed(context, '/login'),
@@ -299,7 +332,7 @@ class _SignupScreenState extends State<SignupScreen> {
         prefixIcon: Icon(icon, color: Colors.white.withOpacity(0.7), size: 22),
         hintText: hint,
         hintStyle: GoogleFonts.poppins(color: Colors.white.withOpacity(0.5)),
-        contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide.none,
@@ -314,7 +347,13 @@ class _SocialButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-  const _SocialButton({required this.icon, required this.label, required this.onTap});
+
+  const _SocialButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
@@ -336,7 +375,7 @@ class _SocialButton extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(icon, color: Colors.white, size: 19),
-                  SizedBox(width: 5),
+                  const SizedBox(width: 5),
                   Flexible(
                     child: Text(
                       label,

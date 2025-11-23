@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:projet_integration/services/auth_service.dart';
 import 'dart:io';
 
 import '../services/user_service.dart';
@@ -31,8 +32,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
   }
 
   Future<String> _getAccessToken() async {
-    // TODO: remplacer par la vraie logique d'obtention du token
-    return "jwt_token";
+    final token = await AuthService.getAccessToken();
+    return token ?? '';
   }
 
   Future<void> _onSave() async {
