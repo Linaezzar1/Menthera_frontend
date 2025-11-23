@@ -35,7 +35,7 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
   final AudioRecorder _recorder = AudioRecorder();
   String? _audioPath;
 
-  int? _sessionMlId; // <-- Stocke l'ID de session ML pour réutilisation
+  int? _sessionMlId;
 
   @override
   void initState() {
@@ -191,7 +191,6 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
     setState(() {
       _isProcessing = true;
 
-      // Ajoute le message utilisateur avec audio
       _messages.add(ChatMessage(
         text: 'Message vocal (${_recordingDuration.toStringAsFixed(1)}s)',
         isUser: true,
@@ -497,9 +496,6 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          if (!message.isUser && message.emotion.isNotEmpty)
-                            _buildEmotionBadge(message.emotion),
-
                           if (message.audioPath != null)
                             _AudioPlayerWidget(
                               audioPath: message.audioPath!,
