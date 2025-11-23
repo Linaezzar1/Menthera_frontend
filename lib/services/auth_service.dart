@@ -96,4 +96,21 @@ class AuthService {
       throw Exception('Échec du rafraîchissement du token: ${response.body}');
     }
   }
+  static String? getCurrentUserId() {
+    if (_accessToken == null) return null;
+
+    try {
+      final decoded = JwtDecoder.decode(_accessToken!);
+      print(decoded);
+      // Try all possible locations where backend might put the ID
+      if (decoded['sub'] != null) return decoded['sub'].toString();
+      if (decoded['id'] != null) return decoded['id'].toString();
+
+      return null;
+    } catch (e) {
+      print("JWT decode error: $e");
+      return null;
+    }
+  }
+
 }

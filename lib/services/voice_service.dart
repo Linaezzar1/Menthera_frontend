@@ -22,7 +22,7 @@ class VoiceService {
         };
       }
 
-      final uri = Uri.parse('$baseUrl/api/v1/voice/sessions/voice');
+      final uri = Uri.parse('$baseUrl/api/v1/chat/sessions/voice');
       final request = http.MultipartRequest('POST', uri);
 
       request.headers['Authorization'] = 'Bearer $token';

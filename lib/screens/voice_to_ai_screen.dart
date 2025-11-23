@@ -11,7 +11,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:io';
 import '../services/voice_service.dart';
-
+import '../widgets/metntheraDrawer.dart';
 class VoiceToAiScreen extends StatefulWidget {
   const VoiceToAiScreen({super.key});
 
@@ -228,6 +228,7 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      drawer: const MentheraDrawer(),
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
@@ -335,10 +336,13 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
+          // BACK BUTTON (unchanged)
           _NeonButton(
             icon: Icons.arrow_back_ios_new_rounded,
             onTap: () => Navigator.pushReplacementNamed(context, '/welcome'),
           ),
+
+          // TITLE + ONLINE DOT (unchanged)
           Row(
             children: [
               Container(
@@ -355,7 +359,8 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
                     )
                   ],
                 ),
-              ).animate(onPlay: (c) => c.repeat())
+              )
+                  .animate(onPlay: (c) => c.repeat())
                   .fadeOut(duration: 1000.ms)
                   .then()
                   .fadeIn(duration: 1000.ms),
@@ -376,9 +381,38 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
               ),
             ],
           ),
-          _NeonButton(
-            icon: Icons.history_rounded,
-            onTap: () => Navigator.pushNamed(context, '/history'),
+
+          Row(
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  _NeonButton(
+                    icon: Icons.notifications_none_rounded,
+                    onTap: () => Navigator.pushNamed(context, '/notifications'),
+                  ),
+                  Positioned(
+                    right: -2,
+                    top: -2,
+                    child: Container(
+                      width: 10,
+                      height: 10,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFFF3366),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 8),
+              Builder(
+                builder: (ctx) => _NeonButton(
+                  icon: Icons.menu_rounded,
+                  onTap: () => Scaffold.of(ctx).openDrawer(),
+                ),
+              ),
+            ],
           ),
         ],
       ),
