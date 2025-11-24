@@ -13,6 +13,7 @@ class MentheraDrawer extends StatefulWidget {
 class _MentheraDrawerState extends State<MentheraDrawer> {
   Map<String, dynamic>? _user;
   bool _loading = true;
+  String avatarUrl = ""; // <-- ajouter ici
 
   @override
   void initState() {
@@ -25,6 +26,11 @@ class _MentheraDrawerState extends State<MentheraDrawer> {
     final user = await UserService.getProfile();
     setState(() {
       _user = user;
+      // Construire l'URL complète de l'avatar
+      avatarUrl = _user != null && _user!['avatar'] != null && _user!['avatar'] != ""
+          ? "http://172.16.27.16:5000${_user!['avatar']}"
+          : "";
+      print(avatarUrl);
       _loading = false;
     });
   }
@@ -62,14 +68,10 @@ class _MentheraDrawerState extends State<MentheraDrawer> {
                   end: Alignment.bottomCenter,
                 ),
               ),
-              // SafeArea pour éviter que ça passe sous la status bar
               child: SafeArea(
                 bottom: false,
                 child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    minHeight: headerMinHeight,
-                    // maxHeight optionnel si tu veux limiter (ex: media.size.height * 0.28)
-                  ),
+                  constraints: BoxConstraints(minHeight: headerMinHeight),
                   child: _loading
                       ? const Center(
                     child: Padding(
@@ -78,10 +80,7 @@ class _MentheraDrawerState extends State<MentheraDrawer> {
                     ),
                   )
                       : Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     child: Stack(
                       children: [
                         // Contenu profil
@@ -95,14 +94,10 @@ class _MentheraDrawerState extends State<MentheraDrawer> {
                                   CircleAvatar(
                                     radius: 34,
                                     backgroundColor: Colors.white,
-                                    backgroundImage: _user != null &&
-                                        _user!['avatar'] != null &&
-                                        _user!['avatar'] != ""
-                                        ? NetworkImage(_user!['avatar'])
+                                    backgroundImage: avatarUrl.isNotEmpty
+                                        ? NetworkImage(avatarUrl)
                                         : null,
-                                    child: _user == null ||
-                                        _user!['avatar'] == null ||
-                                        _user!['avatar'] == ""
+                                    child: avatarUrl.isEmpty
                                         ? Icon(
                                       Icons.person,
                                       size: 34,
@@ -110,21 +105,16 @@ class _MentheraDrawerState extends State<MentheraDrawer> {
                                     )
                                         : null,
                                   ),
-                                  if (_user != null &&
-                                      (_user?['isPremium'] == true))
+                                  if (_user != null && (_user?['isPremium'] == true))
                                     Positioned(
                                       bottom: 4,
                                       right: 4,
                                       child: Container(
-                                        padding:
-                                        const EdgeInsets.symmetric(
-                                          horizontal: 7,
-                                          vertical: 2,
-                                        ),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 7, vertical: 2),
                                         decoration: BoxDecoration(
                                           color: Colors.deepPurple,
-                                          borderRadius:
-                                          BorderRadius.circular(14),
+                                          borderRadius: BorderRadius.circular(14),
                                           boxShadow: const [
                                             BoxShadow(
                                               color: Colors.black26,
@@ -147,14 +137,11 @@ class _MentheraDrawerState extends State<MentheraDrawer> {
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                _user != null &&
-                                    (_user!['name'] ?? '')
-                                        .toString()
-                                        .isNotEmpty
+                                _user != null && (_user!['name'] ?? '').toString().isNotEmpty
                                     ? _user!['name']
                                     : "Utilisateur",
                                 style: GoogleFonts.orbitron(
-                                  fontSize: 18, // un peu plus petit
+                                  fontSize: 18,
                                   fontWeight: FontWeight.bold,
                                   color: Colors.white,
                                   letterSpacing: 1.1,
@@ -176,7 +163,6 @@ class _MentheraDrawerState extends State<MentheraDrawer> {
                             ],
                           ),
                         ),
-
                         // Icône edit en haut à droite
                         Positioned(
                           top: 0,
@@ -197,68 +183,49 @@ class _MentheraDrawerState extends State<MentheraDrawer> {
                 ),
               ),
             ),
-
             // CONTENU SCROLLABLE
             Expanded(
               child: ListView(
                 padding: EdgeInsets.zero,
                 children: [
                   ListTile(
-                    leading:
-                    const Icon(Icons.star_rounded, color: Colors.amber),
-                    title: const Text(
-                      'Payment',
-                      style: TextStyle(color: Colors.white),
-                    ),
+                    leading: const Icon(Icons.star_rounded, color: Colors.amber),
+                    title: const Text('Payment', style: TextStyle(color: Colors.white)),
                     onTap: () {
                       Navigator.pop(context);
                       Navigator.pushNamed(context, '/payment');
                     },
                   ),
                   ListTile(
-                    leading: const Icon(Icons.insights_rounded,
-                        color: Colors.white),
-                    title: const Text(
-                      'Historique d\'émotions',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                    subtitle: const Text(
-                      'Filtrer par période',
-                      style: TextStyle(color: Colors.white70, fontSize: 12),
-                    ),
+                    leading: const Icon(Icons.insights_rounded, color: Colors.white),
+                    title: const Text('Historique d\'émotions', style: TextStyle(color: Colors.white)),
+                    subtitle: const Text('Filtrer par période', style: TextStyle(color: Colors.white70, fontSize: 12)),
                     onTap: () {
                       Navigator.pop(context);
                       Navigator.pushNamed(context, '/emotion-history');
                     },
                   ),
                   ListTile(
-                    leading: const Icon(
-                      Icons.sports_esports_rounded,
-                      color: Colors.white,
-                    ),
-                    title: const Text(
-                      'Challenge hebdomadaire',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                    subtitle: const Text(
-                      'Mini-jeux & quiz',
-                      style: TextStyle(color: Colors.white70, fontSize: 12),
-                    ),
+                    leading: const Icon(Icons.sports_esports_rounded, color: Colors.white),
+                    title: const Text('Challenge hebdomadaire', style: TextStyle(color: Colors.white)),
+                    subtitle: const Text('Mini-jeux & quiz', style: TextStyle(color: Colors.white70, fontSize: 12)),
                     onTap: () {
                       Navigator.pop(context);
                       Navigator.pushNamed(context, '/weekly-challenge');
                     },
                   ),
+                  ListTile(
+                    leading: const Icon(Icons.insert_chart, color: Colors.white),
+                    title: const Text('Résumé hebdomadaire', style: TextStyle(color: Colors.white)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.pushNamed(context, '/weekly-summary');
+                    },
+                  ),
                   const Divider(color: Colors.white24),
                   ListTile(
-                    leading: const Icon(
-                      Icons.logout_rounded,
-                      color: Colors.redAccent,
-                    ),
-                    title: const Text(
-                      'Déconnexion',
-                      style: TextStyle(color: Colors.white),
-                    ),
+                    leading: const Icon(Icons.logout_rounded, color: Colors.redAccent),
+                    title: const Text('Déconnexion', style: TextStyle(color: Colors.white)),
                     onTap: () {
                       Navigator.pop(context);
                       Navigator.pushReplacementNamed(context, '/login');

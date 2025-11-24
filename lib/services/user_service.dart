@@ -1,9 +1,13 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:projet_integration/services/auth_service.dart';
+import 'dart:convert';
+import 'dart:io';
+import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 
 class UserService {
-  static const String baseUrl = 'http://192.168.1.18:5000/api/v1/user';
+  static const String baseUrl = 'http://172.16.27.16:5000/api/v1/user';
 
   /// Récupérer le profil utilisateur
   static Future<Map<String, dynamic>?> getProfile() async {
@@ -33,40 +37,66 @@ class UserService {
   }
 
   /// Mettre à jour le profil utilisateur (nom, avatar)
+
   static Future<Map<String, dynamic>?> updateProfile({String? name, String? avatar}) async {
     try {
-      final token = AuthService.getAccessToken();
-      if (token == null || token.isEmpty) {
-        print('Aucun token - utilisateur non connecté');
-        return null;
-      }
+      final token = await AuthService.getAccessToken();
+      if (token == null || token.isEmpty) return null;
 
       final uri = Uri.parse('$baseUrl/profile');
-      final Map<String, dynamic> body = {};
-      if (name != null) body['name'] = name;
-      if (avatar != null) body['avatar'] = avatar;
 
-      final resp = await http.put(
-        uri,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode(body),
-      );
+      // Upload multipart si avatar local
+      if (avatar != null && avatar.isNotEmpty && !avatar.startsWith('http')) {
+        String ext = avatar.split('.').last.toLowerCase();
+        String mimeType = 'jpeg';
+        if (ext == 'png') mimeType = 'png';
+        else if (ext == 'gif') mimeType = 'gif';
 
-      print('Update status: ${resp.statusCode}');
-      if (resp.statusCode == 200) {
-        final data = jsonDecode(resp.body);
-        return data['data'] ?? data;
+        var request = http.MultipartRequest('PATCH', uri)
+          ..headers['Authorization'] = 'Bearer $token';
+        if (name != null) request.fields['name'] = name;
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'avatar',
+            avatar,
+            contentType: MediaType('image', mimeType),
+          ),
+        );
+
+        var streamedResponse = await request.send();
+        var response = await http.Response.fromStream(streamedResponse);
+
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          return data['data'] ?? data;
+        }
+        return null;
+      } else {
+        // JSON PATCH si pas de fichier local
+        final Map<String, dynamic> body = {};
+        if (name != null) body['name'] = name;
+        if (avatar != null) body['avatar'] = avatar;
+
+        final resp = await http.patch(
+          uri,
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode(body),
+        );
+
+        if (resp.statusCode == 200) {
+          final data = jsonDecode(resp.body);
+          return data['data'] ?? data;
+        }
+        return null;
       }
-      return null;
     } catch (e) {
       print('Erreur updateProfile: $e');
       return null;
     }
   }
-
   /// Upload avatar
   static Future<String?> uploadAvatarToServer(String filePath, String accessToken) async {
     try {

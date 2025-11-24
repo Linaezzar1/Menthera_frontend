@@ -9,7 +9,7 @@ class PaymentService {
 
     try {
       final response = await http.post(
-        Uri.parse('http://192.168.1.18:5000/api/v1/billing/checkout'),
+        Uri.parse('http://172.16.27.16:5000/api/v1/billing/checkout'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',

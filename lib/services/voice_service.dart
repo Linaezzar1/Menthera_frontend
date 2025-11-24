@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:projet_integration/services/auth_service.dart';
 
 class VoiceService {
-  static const String baseUrl = 'http://192.168.1.18:5000';
+  static const String baseUrl = 'http://172.16.27.16:5000';
 
   static Future<Map<String, dynamic>?> analyzeVoice(
       String audioPath,
@@ -103,4 +103,27 @@ class VoiceService {
       };
     }
   }
+
+
+  static Future<bool> endSession(int sessionMlId) async {
+    try {
+      final token = AuthService.getAccessToken();
+      if (token == null || token.isEmpty) return false;
+
+      final uri = Uri.parse('$baseUrl/api/v1/chat/sessions/$sessionMlId/complete');
+      final resp = await http.post(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      return resp.statusCode == 200 || resp.statusCode == 201;
+    } catch (e) {
+      print('❌ Exception endSession: $e');
+      return false;
+    }
+  }
+
 }

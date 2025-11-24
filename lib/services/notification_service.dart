@@ -33,7 +33,7 @@ class NotificationItem {
 
 class NotificationService {
   // même style que VoiceService
-  static const String baseUrl = 'http://192.168.1.18:5000';
+  static const String baseUrl = 'http://172.16.27.16:5000';
 
   static Future<Map<String, String>> _buildHeaders() async {
     final token = AuthService.getAccessToken(); // même méthode que pour la voix

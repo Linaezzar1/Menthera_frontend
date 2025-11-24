@@ -8,6 +8,7 @@ import 'package:projet_integration/screens/payment_screen.dart';
 import 'package:projet_integration/screens/payment_success.dart';
 import 'package:projet_integration/screens/signup_screen.dart';
 import 'package:projet_integration/screens/voice_to_ai_screen.dart';
+import 'package:projet_integration/screens/weeklySummaryListPage.dart';
 import 'package:projet_integration/screens/weekly_challenge_page.dart';
 import 'package:projet_integration/screens/welcome_screen.dart';
 import 'package:projet_integration/services/auth_guard.dart';
@@ -45,8 +46,9 @@ class MyApp extends StatelessWidget {
         '/notifications': (context) => const AuthGuard(child: NotificationsPage()),
         '/emotion-history': (context) => const AuthGuard(child: EmotionHistoryPage()),
       //  '/profile': (context) => const AuthGuard(child: ProfilePage()),
-        '/weekly-challenge': (context) =>
-        const AuthGuard(child: WeeklyChallengePage()),
+        '/weekly-challenge': (context) => const AuthGuard(child: WeeklyChallengePage()),
+        '/weekly-summary': (context) => const AuthGuard(child: WeeklySummaryListPage()),
+
       },
     );
   }

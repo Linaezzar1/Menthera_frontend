@@ -12,6 +12,7 @@ import 'dart:math' as math;
 import 'dart:io';
 import '../services/voice_service.dart';
 import '../widgets/metntheraDrawer.dart';
+
 class VoiceToAiScreen extends StatefulWidget {
   const VoiceToAiScreen({super.key});
 
@@ -136,8 +137,7 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
           _sessionMlId = data['session_id'] is int ? data['session_id'] : int.tryParse(data['session_id'].toString());
         }
 
-        // Récupérer tout le tableau des messages (user + assistant)
-        final messagesFromServer = data['messages']; // À adapter selon votre API
+        final messagesFromServer = data['messages'];
 
         if (messagesFromServer is List) {
           setState(() {
@@ -154,7 +154,6 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
             }).toList();
           });
         } else {
-          // Fallback si messages absents : prendre response simple
           final respText = data['response'] ?? 'Aucune réponse';
           setState(() {
             _messages.add(ChatMessage(
@@ -222,6 +221,36 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
         );
       }
     });
+  }
+
+  // New method to end the current session
+  Future<void> _endCurrentSession() async {
+    if (_sessionMlId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Aucune séance en cours')),
+      );
+      return;
+    }
+
+    final success = await VoiceService.endSession(_sessionMlId!);
+
+    if (success) {
+      setState(() {
+        _sessionMlId = null;
+        _messages.add(
+          ChatMessage(
+            text: 'Séance terminée. Vous pouvez démarrer une nouvelle conversation quand vous voulez.',
+            isUser: false,
+            emotion: 'neutral',
+            timestamp: DateTime.now(),
+          ),
+        );
+      });
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Impossible de terminer la séance')),
+      );
+    }
   }
 
   @override
@@ -336,7 +365,6 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
       ),
       child: Row(
         children: [
-          // BACK BUTTON
           _NeonButton(
             icon: Icons.arrow_back_ios_new_rounded,
             onTap: () => Navigator.pushReplacementNamed(context, '/welcome'),
@@ -344,7 +372,6 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
 
           const SizedBox(width: 8),
 
-          // TITRE FLEXIBLE AU CENTRE
           Expanded(
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -394,7 +421,6 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
 
           const SizedBox(width: 8),
 
-          // ACTIONS (NOTIF + MENU) COMPACITES
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -747,7 +773,26 @@ class _VoiceToAiScreenState extends State<VoiceToAiScreen> with TickerProviderSt
         children: [
           if (_isRecording) _buildRecordingIndicator(),
           if (_isRecording) const SizedBox(height: 12),
-          _buildMicButton(),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // End Session Button (only visible if session is active)
+              if (_sessionMlId != null)
+                Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: _NeonButton(
+                    icon: Icons.stop_circle_outlined,
+                    onTap: _isProcessing
+                        ? () {}
+                        : () {
+                      _endCurrentSession();
+                    },
+                  ),
+                ),
+              // Microphone Button
+              _buildMicButton(),
+            ],
+          ),
         ],
       ),
     );
